@@ -36,10 +36,12 @@ class NavigationService:
 
     def find_prev_section(self, current_line: int) -> int | None:
         prev = None
+
         for line in self._section_lines():
             if line >= current_line:
                 break
             prev = line
+
         return prev
 
     def find_first_section(self) -> int | None:

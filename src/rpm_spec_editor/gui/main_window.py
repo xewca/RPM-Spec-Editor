@@ -17,11 +17,7 @@ from rpm_spec_editor.gui.structure_view import StructureView
 from rpm_spec_editor.gui.spec_tree_model import SpecTreeModel
 from rpm_spec_editor.gui.navigation import NavigationService
 from rpm_spec_editor.gui.editor_commands import EditorCommands
-
-class NavigationSource(Enum):
-    EDITOR = "editor"
-    TREE = "tree"
-    STRUCTURE = "structure"
+from rpm_spec_editor.gui.navigation_types import NavigationSource
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -83,6 +79,7 @@ class MainWindow(QMainWindow):
         if not doc:
             return
 
+        self.editor.clear_highlight()
         doc.content = self.editor.get_content()
         self._update_window_title()
 
@@ -172,7 +169,6 @@ class MainWindow(QMainWindow):
             self.editor.clear_range_highlight()
 
         self._navigate_to_line(line_no, NavigationSource.EDITOR) # source="editor"
-        self.editor.clear_highlight()
 
     def _create_menu(self):
         menu = self.menuBar()
@@ -331,7 +327,12 @@ class MainWindow(QMainWindow):
                 self.structure_view.expand(parent)
                 parent = parent.parent()
 
-            self.structure_view.setCurrentIndex(index)
+            # self.structure_view.setCurrentIndex(index)
+            selection = self.structure_view.selectionModel()
+            selection.setCurrentIndex(
+                index,
+                QItemSelectionModel.ClearAndSelect
+            )
             self.structure_view.scrollTo(index)
         finally:
             self._navigation_lock = False
@@ -362,13 +363,10 @@ class MainWindow(QMainWindow):
         self._navigation_lock = True
         try:
             if source != NavigationSource.EDITOR:
-                self.editor.go_to_line(line_no)
-                self.editor.highlight_line(line_no)
+                self.editor.move_to_line(line_no)
 
-            if source != NavigationSource.STRUCTURE:
-                model = self.structure_view.model()
-                if isinstance(model, SpecTreeModel):
-                    model.set_active_line(line_no)
+            if source != NavigationSource.TREE:
+                self._select_tree_item_by_line(line_no)
         finally:
             self._navigation_lock = False
 

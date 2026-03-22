@@ -124,21 +124,21 @@ class SpecTreeModel(QAbstractItemModel):
 
         if role == Qt.BackgroundRole:
             if (
-                self._active_section_line is not None
-                and item.line_no is not None
-                and item.parent
-                and item.parent.text == "Секции"
-                and item.line_no <= self._active_section_line
+                    self._active_section_line is not None
+                    and item.line_no is not None
+                    and item.parent
+                    and item.parent.text == "Секции"
+                    and item.line_no <= self._active_section_line
             ):
                 return QBrush(QColor("#e3f2fd"))
 
         if role == Qt.FontRole:
             if (
-                self._active_section_line is not None
-                and item.line_no is not None
-                and item.parent
-                and item.parent.text == "Секции"
-                and item.line_no <= self._active_section_line
+                    self._active_section_line is not None
+                    and item.line_no is not None
+                    and item.parent
+                    and item.parent.text == "Секции"
+                    and item.line_no <= self._active_section_line
             ):
                 font = QFont()
                 font.setBold(True)
@@ -205,25 +205,11 @@ class SpecTreeModel(QAbstractItemModel):
         sections_root = TreeItem("Секции", self._root)
         self._root.add_child(sections_root)
 
-        for section_name in spec.section_order:
-            section = spec.sections[section_name]
-
-            sections_root.add_child(
-                TreeItem(
-                    f"%{section.name}",
-                    sections_root,
-                    line_no=section.start_line
-                )
-            )
-
-
-        self._issues_root = TreeItem("Ошибки и предупреждения", self._root)
-        self._root.add_child(self._issues_root)
 
         section_items = []
 
         for section_name in spec.section_order:
-            section = spec.sections(section_name)
+            section = spec.sections[section_name]
 
             item = TreeItem(
                 f"{section.name}",
@@ -254,6 +240,17 @@ class SpecTreeModel(QAbstractItemModel):
                 item.end_line = spec.total_lines
 
         self.endResetModel()
+        self._issues_root = TreeItem("Ошибки и предупреждения", self._root)
+        self._root.add_child(self._issues_root)
+
+'''
+Ты знаешь на каком этапе сейчас идет разработка 
+в проекте "Диплом" - чат "Проект редактора RPM".
+Какие следующие этапы в этом чате?
+Просмотри весь проект "Диплом", затем просмотри
+и проанализируй репозиторий гитхаба:
+https://github.com/devtape/RPM-Spec-Editor
+'''
 
     def get_active_section_range(self) -> tuple[int, int] | None:
         if self._active_section_line is None:
@@ -329,6 +326,7 @@ class SpecTreeModel(QAbstractItemModel):
             self.endInsertRows()
 
         self.clear_item_issues()
+        self.assign_issues_to_sections(issues)
         self.attach_issue_nodes()
         # self.layoutChanged.emit()
         self.dataChanged.emit(
@@ -496,9 +494,9 @@ class SpecTreeModel(QAbstractItemModel):
 
     def _is_active_section(self, item: TreeItem) -> bool:
         return (
-            self._active_section_line is not None
-            and item.line_no is not None
-            and item.parent
-            and item.parent.text == "Секции"
-            and item.line_no <= self._active_section_line
+                self._active_section_line is not None
+                and item.line_no is not None
+                and item.parent
+                and item.parent.text == "Секции"
+                and item.line_no <= self._active_section_line
         )

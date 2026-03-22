@@ -1,6 +1,7 @@
 from lib2to3.fixes.fix_metaclass import remove_trailing_newline
 
 from rpm_spec_editor.gui.spec_tree_model import SpecTreeModel
+from rpm_spec_editor.gui.navigation_types import NavigationSource
 
 class EditorCommands:
     def __init__(self, editor, navigation, main_window):
@@ -30,8 +31,14 @@ class EditorCommands:
 
     def _apply_navigation(self, line_no: int):
         self._editor.move_to_line(line_no)
-        self._editor.highlight_line(line_no)
+        #self._editor.highlight_line(line_no)
         self._main_window.sync_tree_to_line(line_no)
+
+    def _on_tree_jump(self, line_no: int):
+        self._navigation_to_line(line_no, NavigationSource.TREE)
+
+        self._editor.highlight_line(line_no)
+        self._editor.setFocus()
 
     def go_to_first_section(self):
         line_no = self._navigation.find_first_section()
