@@ -5,7 +5,10 @@ from PyQt5.QtWidgets import (
     QFileDialog,
     QMessageBox,
     QSplitter,
-    QAction
+    QAction,
+    QTextEdit,
+    QTreeWidget,
+    QTreeView, QTreeWidgetItem
 )
 from PyQt5.QtGui import QTextCursor
 from PyQt5.QtCore import QTimer, QModelIndex, Qt, QItemSelectionModel
@@ -27,11 +30,32 @@ class MainWindow(QMainWindow):
         self.resize(900, 600)
         self.controller = AppController()
 
-        self.editor = TextEditor(self)
-        self.structure_view = StructureView(self)
 
         self._tree_model = SpecTreeModel()
+        self.structure_view = StructureView(self)
         self.structure_view.setModel(self._tree_model)
+        self.editor = TextEditor(self)
+
+        self.metadata_panel = self.structure_view
+
+        self.issues_panel = QTreeWidget()
+        self.issues_panel.setHeaderLabels(["Тип", "Строка", "Сообщение"])
+
+        self.top_splitter = QSplitter(Qt.Horizontal)
+        self.top_splitter.addWidget(self.metadata_panel)
+        self.top_splitter.addWidget(self.editor)
+        self.top_splitter.setSizes([300, 700])
+
+        self.bottom_panel = self.issues_panel
+        self.bottom_panel.setMinimumHeight(150)
+
+        self.main_splitter = QSplitter(Qt.Vertical)
+        self.main_splitter.addWidget(self.top_splitter)
+        self.main_splitter.addWidget(self.bottom_panel)
+
+        self.main_splitter.setSizes([600, 150])
+
+        self.setCentralWidget(self.main_splitter)
 
         self.navigation = NavigationService(self._tree_model)
 
@@ -54,12 +78,12 @@ class MainWindow(QMainWindow):
         self._rebuild_timer.setSingleShot(True)
         self._rebuild_timer.timeout.connect(self._rebuild_structure)
 
-        splitter = QSplitter(self)
-        splitter.addWidget(self.structure_view)
-        splitter.addWidget(self.editor)
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 3)
-        self.setCentralWidget(splitter)
+        #splitter = QSplitter(self)
+        #splitter.addWidget(self.structure_view)
+        #splitter.addWidget(self.editor)
+        #splitter.setStretchFactor(0, 1)
+        #splitter.setStretchFactor(1, 3)
+        #self.setCentralWidget(splitter)
 
         self._navigation_lock = False
         self._navigation_source: NavigationSource | None = None
@@ -97,10 +121,16 @@ class MainWindow(QMainWindow):
 
         self._tree_model.rebuild(parsed)
         self._tree_model.update_issues(issues)
+        self.show_issues(issues)
+        self.issues_panel.itemClicked.connect(self._on_issue_clicked)
 
         self._restore_expanded_lines(expanded)
 
         self._expand_issues_if_needed()
+
+    def _on_issue_clicked(self, item):
+        line = int(item.text(1))
+        self.editor.go_to_line(line)
 
     def _on_tree_jump(self, line_no: int):
         self._navigate_to_line(line_no, NavigationSource.TREE)
@@ -287,10 +317,27 @@ class MainWindow(QMainWindow):
 
             self._tree_model.rebuild(parsed)
             self._tree_model.update_issues(issues)
+            self.show_issues(issues)
+            self.issues_panel.itemClicked.connect(self.on_issue_clicked)
 
             self._update_window_title()
         except FileAccessError as exc:
             QMessageBox.critical(self, "Ошибка", str(exc))
+
+    def show_issues(self, issues):
+        self.issues_panel.clear()
+
+        for issue in issues:
+            item = QTreeWidgetItem([
+                issue.level.value,
+                str(issue.line_no),
+                issue.message
+            ])
+            self.issues_panel.addTopLevelItem(item)
+
+    def on_issue_clicked(self, item):
+        line = int(item.text(1))
+        self.editor.go_to_line(line)
 
     def save_file(self):
         try:

@@ -4,7 +4,7 @@ from rpm_spec_editor.parsing.models import SpecFile
 from rpm_spec_editor.domain.validation import ValidationIssue, ValidationLevel
 
 class SpecValidator:
-    REQUIRED_HEADERS = {"Name", "Version", "Release"}
+    REQUIRED_HEADERS = {"Name", "Version", "Release", "BuildRequires"}
     OPTIONAL_HEADERS = {"Summary", "License"}
     REQUIRED_SECTIONS = {"prep", "build", "install", "files"}
 

@@ -28,15 +28,13 @@ class TreeItem:
 
         self.line_no = line_no
 
-        self.start_line = start_line if start_line is not None else line_no
+        self.start_line = start_line if start_line is not None else (line_no or 0)
         self.end_line = end_line
 
+        self.section = None
         self.is_issue = is_issue
         self.children: list[TreeItem] = []
         self.issues: list[ValidationIssue] = []
-
-        self.start_line: int | None
-        self.end_line: int | None
 
     def add_child(self, item: "TreeItem") -> None:
         self.children.append(item)
@@ -44,6 +42,7 @@ class TreeItem:
     def child(self, row: int) -> "TreeItem | None":
         if 0 <= row < len(self.children):
             return self.children[row]
+        return None
 
     def child_count(self) -> int:
         return len(self.children)
@@ -53,9 +52,13 @@ class TreeItem:
             return self.parent.children.index(self)
         return 0
 
+
+    def has_issues(self) -> bool:
+        return any(i.severity == "error" for i in self.issues)
+
     @property
     def max_line_no(self) -> int:
-        lines = [self.line_no] if self.line_no else []
+        lines = [self.line_no] if self.line_no is not None else []
         for child in self.children:
             lines.append(child.max_line_no)
         return max(lines) if lines else 1
@@ -194,6 +197,44 @@ class SpecTreeModel(QAbstractItemModel):
 
         self._root = TreeItem("Spec File")
 
+        # headers
+        self.headers_root = TreeItem("Метаданные", self._root)
+        self._root.add_child(self.headers_root)
+
+        # sections
+        self.sections_root = TreeItem("Секции", self._root)
+        self._root.add_child(self.sections_root)
+
+        section_items = []
+
+        for section_name in spec.section_order:
+            section = spec.sections[section_name]
+
+            item = TreeItem(
+                section.name,
+                self.sections_root,
+                line_no=section.start_line,
+                start_line=section.start_line
+            )
+
+            section_items.append(item)
+            self.sections_root.add_child(item)
+
+        # end lines
+        for i, item in enumerate(section_items):
+            if i + 1 < len(section_items):
+                next_item = section_items[i + 1]
+                item.end_line = next_item.start_line - 1
+            else:
+                item.end_line = spec.total_lines
+
+        self.endResetModel()
+
+    '''
+        self.beginResetModel()
+
+        self._root = TreeItem("Spec File")
+
         headers_root = TreeItem("Метаданные", self._root)
         self._root.add_child(headers_root)
 
@@ -202,12 +243,10 @@ class SpecTreeModel(QAbstractItemModel):
                 TreeItem(f"{key}: {value}", headers_root)
             )
 
-        sections_root = TreeItem("Секции", self._root)
-        self._root.add_child(sections_root)
-
+        self.sections_root = TreeItem("Секции", self._root)
+        self._root.add_child(self.sections_root)
 
         section_items = []
-
         for section_name in spec.section_order:
             section = spec.sections[section_name]
 
@@ -220,7 +259,8 @@ class SpecTreeModel(QAbstractItemModel):
 
             section_items.append(item)
             sections_root.add_child(item)
-        '''
+
+        '
         for issue in self._issues:
             prefix = "x" if issue.level.name == "ERROR" else "!"
             self._issues_root.add_child(
@@ -230,7 +270,7 @@ class SpecTreeModel(QAbstractItemModel):
                     line_no=issue.line_no
                 )
             )
-        '''
+        '
 
         for i, item in enumerate(section_items):
             if i + 1 < len(section_items):
@@ -239,18 +279,17 @@ class SpecTreeModel(QAbstractItemModel):
             else:
                 item.end_line = spec.total_lines
 
+        # self._issues_root = TreeItem("Ошибки и предупреждения", self._root)
+        # self._root.add_child(self._issues_root)
+        self._root.add_child(self.sections_root)
         self.endResetModel()
-        self._issues_root = TreeItem("Ошибки и предупреждения", self._root)
-        self._root.add_child(self._issues_root)
+    '''
 
-'''
-Ты знаешь на каком этапе сейчас идет разработка 
-в проекте "Диплом" - чат "Проект редактора RPM".
-Какие следующие этапы в этом чате?
-Просмотри весь проект "Диплом", затем просмотри
-и проанализируй репозиторий гитхаба:
-https://github.com/devtape/RPM-Spec-Editor
-'''
+    def item_from_index(self, index):
+        if not index.isValid():
+            return None
+
+        return index.internalPointer()
 
     def get_active_section_range(self) -> tuple[int, int] | None:
         if self._active_section_line is None:
@@ -334,6 +373,30 @@ https://github.com/devtape/RPM-Spec-Editor
             QModelIndex(),
             [Qt.BackgroundRole, Qt.FontRole]
         )
+
+
+    def assign_issues_to_sections(self, issues):
+        if not hasattr(self, "_section_items"):
+            return
+
+            # очистка
+        for item in self._section_items:
+            item.issues = []
+
+            # распределение
+        for issue in issues:
+            line = getattr(issue, "line", None)
+            if line is None:
+                continue
+
+            for item in self._section_items:
+                if item.start_line is None or item.end_line is None:
+                    continue
+
+                if item.start_line <= line <= item.end_line:
+                    item.issues.append(issue)
+                    break
+
 
     def attach_issue_nodes(self):
         sections_root = None
