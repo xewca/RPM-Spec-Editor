@@ -21,7 +21,6 @@ A desktop application for creating, editing, and analyzing RPM `.spec` files wit
 ## Project Structure
 
 rpm-spec-editor/
-│
 ├── src/rpm_spec_editor/
 │ ├── gui/ # UI components
 │ ├── core/ # business logic / controller
@@ -29,7 +28,6 @@ rpm-spec-editor/
 │ ├── services/ # parsing, IO, analysis
 │ ├── config/ # settings management
 │ └── app.py # entry point
-│
 ├── docs/
 ├── tests/
 ├── pyproject.toml
@@ -41,9 +39,9 @@ rpm-spec-editor/
 git clone https://github.com/xewca/RPM-Spec-Editor.git
 cd RPM-Spec-Editor
 pip install -e .
+```
 
-MIT License
-
+## MIT License
 
 ---
 
@@ -86,3 +84,4 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+```
