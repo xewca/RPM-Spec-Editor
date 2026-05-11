@@ -1,4 +1,5 @@
 from enum import Enum
+from pathlib import Path
 
 from PyQt5.QtWidgets import (
     QMainWindow,
@@ -8,19 +9,44 @@ from PyQt5.QtWidgets import (
     QAction,
     QTextEdit,
     QTreeWidget,
-    QTreeView, QTreeWidgetItem
+    QTreeView,
+    QTreeWidgetItem,
+    QShortcut,
+    QVBoxLayout,
+    QWidget,
+    QLabel,
+    QPlainTextEdit,
+    QTabWidget,
+    QFileSystemModel
 )
-from PyQt5.QtGui import QTextCursor
-from PyQt5.QtCore import QTimer, QModelIndex, Qt, QItemSelectionModel
+from PyQt5.QtGui import (
+    QTextCursor,
+    QKeySequence,
+    QTextDocument,
+    QFont
+)
+from PyQt5.QtCore import (
+    QTimer,
+    QModelIndex,
+    Qt,
+    QItemSelectionModel,
+    QThread
+)
 
 from rpm_spec_editor.core.app_controller import AppController
-from rpm_spec_editor.gui.text_editor import TextEditor
 from rpm_spec_editor.storage.file_manager import FileAccessError
 from rpm_spec_editor.gui.structure_view import StructureView
 from rpm_spec_editor.gui.spec_tree_model import SpecTreeModel
 from rpm_spec_editor.gui.navigation import NavigationService
 from rpm_spec_editor.gui.editor_commands import EditorCommands
 from rpm_spec_editor.gui.navigation_types import NavigationSource
+from rpm_spec_editor.gui.code_editor import CodeEditor
+from rpm_spec_editor.gui.search_bar import SearchBar
+from rpm_spec_editor.gui.styles import build_style
+from rpm_spec_editor.gui.theme import DARK_COLORS, LIGHT_COLORS
+from rpm_spec_editor.core.settings_manager import SettingsManager
+from rpm_spec_editor.gui.dialogs.settings_dialog import SettingsDialog
+from rpm_spec_editor.gui.workers.build_worker import BuildWorker
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -29,33 +55,94 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("RPM Spec Editor")
         self.resize(900, 600)
         self.controller = AppController()
+        self.settings = SettingsManager()
+        self._is_modified = False
 
-
+        self.current_theme = self.settings.get("theme", "dark")
         self._tree_model = SpecTreeModel()
         self.structure_view = StructureView(self)
         self.structure_view.setModel(self._tree_model)
-        self.editor = TextEditor(self)
+        self.metadata_tree = QTreeWidget()
+        self.metadata_tree.setHeaderLabels(["Поле", "Значение"])
+        self.metadata_tree.setColumnWidth(0, 120)
 
-        self.metadata_panel = self.structure_view
+        self.editor = CodeEditor()
+        self._apply_settings()
+        self.search_bar = SearchBar()
+        #self.editor = TextEditor(self)
+        self.apply_theme()
+
+        self.file_model = QFileSystemModel()
+        self.file_model.setRootPath("")
+
+        self.file_tree = QTreeView()
+        self.file_tree.setModel(self.file_model)
+
+        editor_container = QWidget()
+        editor_layout = QVBoxLayout(editor_container)
+        editor_layout.setContentsMargins(0, 0, 0, 0)
+        editor_layout.addWidget(self.search_bar)
+        editor_layout.addWidget(self.editor)
+
+        find_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
+        find_shortcut.activated.connect(self.search_bar.open)
+
+        self.search_bar.searchRequested.connect(self._search_text)
+        self.search_bar.nextRequested.connect(self._find_next)
+        self.search_bar.previousRequested.connect(self._find_previous)
+        self.search_bar.closed.connect(self._clear_search)
+
+        #self.metadata_panel = self.structure_view
+        self.sidebar_tabs = QTabWidget()
+        self.sidebar_tabs.addTab(self.metadata_tree, "Метаданные")
+        self.sidebar_tabs.addTab(self.structure_view, "Секции")
+        self.sidebar_tabs.addTab(self.file_tree, "Файлы")
 
         self.issues_panel = QTreeWidget()
         self.issues_panel.setHeaderLabels(["Тип", "Строка", "Сообщение"])
+        self.issues_panel.setRootIsDecorated(False)
+        self.issues_panel.setUniformRowHeights(True)
+        self.issues_panel.setAlternatingRowColors(True)
+
+        self.build_output = QTextEdit()
+        self.build_output.setReadOnly(True)
+        self.build_output.setPlaceholderText("Build output...")
 
         self.top_splitter = QSplitter(Qt.Horizontal)
-        self.top_splitter.addWidget(self.metadata_panel)
-        self.top_splitter.addWidget(self.editor)
+        self.top_splitter.addWidget(self.sidebar_tabs)
+        self.top_splitter.addWidget(editor_container)
         self.top_splitter.setSizes([300, 700])
 
-        self.bottom_panel = self.issues_panel
-        self.bottom_panel.setMinimumHeight(150)
+        save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
+        save_shortcut.activated.connect(self.save_file)
+
+        # self.bottom_panel = self.issues_panel
+        # self.bottom_panel.setMinimumHeight(150)
+        self.bottom_panel = QTabWidget()
+        self.bottom_panel.addTab(self.issues_panel, "Проблемы")
+        self.bottom_panel.addTab(self.build_output, "Сборка")
 
         self.main_splitter = QSplitter(Qt.Vertical)
         self.main_splitter.addWidget(self.top_splitter)
         self.main_splitter.addWidget(self.bottom_panel)
 
-        self.main_splitter.setSizes([600, 150])
+        # self.main_splitter.setSizes([600, 150])
+        self.main_splitter.setStretchFactor(0, 4)
+        self.main_splitter.setStretchFactor(1,1)
+        self.top_splitter.setStretchFactor(0, 1)
+        self.top_splitter.setStretchFactor(1, 3)
 
         self.setCentralWidget(self.main_splitter)
+
+        self.status_bar = self.statusBar()
+        self.cursor_position_label = QLabel("Ln 1, Col 1")
+        self.diagnostics_label = QLabel("0 errors, 0 warnings")
+        self.parser_status_label = QLabel("Ready")
+        self.modified_label = QLabel("Saved")
+        self.status_bar.addPermanentWidget(self.modified_label)
+        self.status_bar.addPermanentWidget(self.diagnostics_label)
+        self.status_bar.addPermanentWidget(self.cursor_position_label)
+        self.status_bar.addPermanentWidget(self.parser_status_label)
 
         self.navigation = NavigationService(self._tree_model)
 
@@ -73,6 +160,7 @@ class MainWindow(QMainWindow):
         self.structure_view.jumpRequested.connect(self._on_tree_jump)
         self.editor.textChanged.connect(self._on_text_changed)
         self.editor.cursorPositionChanged.connect(self._on_cursor_position_changed)
+        self.issues_panel.itemClicked.connect(self._on_issue_clicked)
 
         self._rebuild_timer = QTimer(self)
         self._rebuild_timer.setSingleShot(True)
@@ -88,6 +176,17 @@ class MainWindow(QMainWindow):
         self._navigation_lock = False
         self._navigation_source: NavigationSource | None = None
 
+        self._create_actions()
+        self.editor.set_actions({
+            "undo": self.undo_action,
+            "redo": self.redo_action,
+
+            "cut": self.cut_action,
+            "copy": self.copy_action,
+            "paste": self.paste_action,
+
+            "select_all": self.select_all_action
+        })
         self._create_menu()
 
     def sync_tree_to_line(self, line_no: int):
@@ -99,38 +198,61 @@ class MainWindow(QMainWindow):
         self.structure_view.scrollTo(index)
 
     def _on_text_changed(self):
-        doc = self.controller.current_document
-        if not doc:
-            return
-
-        self.editor.clear_highlight()
-        doc.content = self.editor.get_content()
+        self._is_modified = True
+        self.modified_label.setText("Modified")
         self._update_window_title()
+        if self.controller.current_document:
+            self.controller.current_document.content = (self.editor.get_content())
 
-        self._rebuild_timer.start(400)
+        self._rebuild_timer.start(300)
 
     def _rebuild_structure(self):
+        self.parser_status_label.setText("Parsing...")
+
+        if self._navigation_lock:
+            return
+
         doc = self.controller.current_document
+
         if not doc:
             return
 
-        parsed = doc.parse()
-        issues = self.controller.validator.validate(parsed)
+        if not doc.content.strip():
+            return
 
+        try:
+            parsed = doc.parse()
+            self._update_metadata(parsed)
+        except Exception as exc:
+            print("Parse error:", exc)
+            self.parser_status_label.setText("Parse error")
+            return
+
+        #issues = self.controller.validator.validate(parsed)
+        base_issues = self.controller.validator.validate(parsed)
+        rpm_issues = self.controller.rpm_validator.validate(doc.content)
+        issues = base_issues + rpm_issues
         expanded = self._save_expanded_lines()
 
         self._tree_model.rebuild(parsed)
         self._tree_model.update_issues(issues)
         self.show_issues(issues)
-        self.issues_panel.itemClicked.connect(self._on_issue_clicked)
-
+        self._update_diagnostics_status(issues)
+        self._apply_editor_diagnostics(issues)
+        # self.issues_panel.itemClicked.connect(self._on_issue_clicked)
         self._restore_expanded_lines(expanded)
-
         self._expand_issues_if_needed()
+        self.parser_status_label.setText("Ready")
 
     def _on_issue_clicked(self, item):
-        line = int(item.text(1))
+        try:
+            line = int(item.text(1))
+        except ValueError:
+            return
+
         self.editor.go_to_line(line)
+        self.editor.highlight_line(line, color="#ffeaa7")
+        self.editor.setFocus()
 
     def _on_tree_jump(self, line_no: int):
         self._navigate_to_line(line_no, NavigationSource.TREE)
@@ -182,6 +304,11 @@ class MainWindow(QMainWindow):
                 self.structure_view.expand(index)
 
     def _on_cursor_position_changed(self):
+        cursor = self.editor.textCursor()
+        line = cursor.blockNumber() + 1
+        column = cursor.columnNumber() + 1
+        self.cursor_position_label.setText(f"Ln {line}, Col {column}")
+
         if self._navigation_lock:
             return
 
@@ -196,28 +323,73 @@ class MainWindow(QMainWindow):
         if range_:
             self.editor.highlight_range(*range_)
         else:
-            self.editor.clear_range_highlight()
+            self.editor.clear_highlight()
 
         self._navigate_to_line(line_no, NavigationSource.EDITOR) # source="editor"
+
+    def _create_actions(self):
+        self.open_action = QAction("Открыть", self)
+        self.open_action.setShortcut("Ctrl+O")
+        self.open_action.triggered.connect(self.open_file)
+
+        self.save_action = QAction("Сохранить", self)
+        self.save_action.setShortcut("Ctrl+S")
+        self.save_action.triggered.connect(self.save_file)
+
+        self.exit_action = QAction("Выход")
+        self.exit_action.triggered.connect(self.close)
+
+        self.undo_action = QAction("Отменить", self)
+        self.undo_action.setShortcut("Ctrl+Z")
+        self.undo_action.triggered.connect(self.editor.undo)
+
+        self.redo_action = QAction("Вернуть", self)
+        self.redo_action.setShortcut("Ctrl+Y")
+        self.redo_action.triggered.connect(self.editor.redo)
+
+        self.cut_action = QAction("Вырезать", self)
+        self.cut_action.setShortcut("Ctrl+X")
+        self.cut_action.triggered.connect(self.editor.cut)
+
+        self.copy_action = QAction("Копировать", self)
+        self.copy_action.setShortcut("Ctrl+C")
+        self.copy_action.triggered.connect(self.editor.copy)
+
+        self.paste_action = QAction("Вставить", self)
+        self.paste_action.setShortcut("Ctrl+V")
+        self.paste_action.triggered.connect(self.editor.paste)
+
+        self.select_all_action = QAction("Выбрать все", self)
+        self.select_all_action.setShortcut("Ctrl+A")
+        self.select_all_action.triggered.connect(self.editor.selectAll)
+
+        self.find_action = QAction("Поиск", self)
+        self.find_action.setShortcut("Ctrl+F")
+        self.find_action.triggered.connect(self.search_bar.open)
+
 
     def _create_menu(self):
         menu = self.menuBar()
 
         file_menu = menu.addMenu("Файл")
 
-        open_action = QAction("Открыть", self)
-        open_action.triggered.connect(self.open_file)
-
-        save_action = QAction("Сохранить", self)
-        save_action.triggered.connect(self.save_file)
-
-        exit_action = QAction("Выход", self)
-        exit_action.triggered.connect(self.close)
-
-        file_menu.addAction(open_action)
-        file_menu.addAction(save_action)
+        file_menu.addAction(self.open_action)
+        file_menu.addAction(self.save_action)
         file_menu.addSeparator()
-        file_menu.addAction(exit_action)
+        file_menu.addAction(self.exit_action)
+
+        edit_menu = menu.addMenu("Правка")
+
+        edit_menu.addAction(self.undo_action)
+        edit_menu.addAction(self.redo_action)
+        edit_menu.addSeparator()
+        edit_menu.addAction(self.cut_action)
+        edit_menu.addAction(self.copy_action)
+        edit_menu.addAction(self.paste_action)
+        edit_menu.addSeparator()
+        edit_menu.addAction(self.select_all_action)
+        edit_menu.addSeparator()
+        edit_menu.addAction(self.find_action)
 
         nav_menu = menu.addMenu("Навигация")
 
@@ -253,6 +425,26 @@ class MainWindow(QMainWindow):
         nav_menu.addAction(prev_section)
         nav_menu.addAction(next_section)
 
+        build_menu = menu.addMenu("Сборка")
+
+        self.build_action = QAction("Build RPM", self)
+        self.build_action.setShortcut("Ctrl+B")
+        self.build_action.triggered.connect(self.build_rpm)
+        build_menu.addAction(self.build_action)
+
+        settings_menu = menu.addMenu("Настройки")
+
+        editor_settings_action = QAction("Настройки редактора", self)
+        editor_settings_action.triggered.connect(self._show_settings_dialog)
+        settings_menu.addAction(editor_settings_action)
+
+        dark_theme_action = QAction("Темная", self)
+        dark_theme_action.triggered.connect(lambda: self.change_theme("dark"))
+        settings_menu.addAction(dark_theme_action)
+        light_theme_action = QAction("Светлая", self)
+        light_theme_action.triggered.connect(lambda: self.change_theme("light"))
+        settings_menu.addAction(light_theme_action)
+
         view_menu = menu.addMenu("Вид")
 
         toggle_section = QAction("Свернуть / развернуть секцию", self)
@@ -279,6 +471,13 @@ class MainWindow(QMainWindow):
 
     def _show_go_to_section_dialog(self):
         pass
+
+    def _update_metadata(self, parsed):
+        self.metadata_tree.clear()
+
+        for key, value in parsed.headers.items():
+            item = QTreeWidgetItem([key, str(value)])
+            self.metadata_tree.addTopLevelItem(item)
 
     def jump_to_line(self, line_no: int):
         if line_no is None:
@@ -309,16 +508,22 @@ class MainWindow(QMainWindow):
 
         try:
             document = self.controller.open_file(path)
-
             self.editor.set_content(document.content)
+            self._is_modified = False
 
             parsed = document.parse()
+            self._update_metadata(parsed)
             issues = self.controller.validator.validate(parsed)
 
             self._tree_model.rebuild(parsed)
             self._tree_model.update_issues(issues)
             self.show_issues(issues)
-            self.issues_panel.itemClicked.connect(self.on_issue_clicked)
+            self._update_diagnostics_status(issues)
+            self._apply_editor_diagnostics(issues)
+            # self.issues_panel.itemClicked.connect(self._on_issue_clicked)
+
+            directory = str(Path(path).parent)
+            self.file_tree.setRootIndex(self.file_model.index(directory))
 
             self._update_window_title()
         except FileAccessError as exc:
@@ -341,19 +546,38 @@ class MainWindow(QMainWindow):
 
     def save_file(self):
         try:
+            if self.controller.current_document:
+                self.controller.current_document.content = (self.editor.get_content())
             self.controller.save_current()
+            self._is_modified = False
+            self.modified_label.setText("Сохранено")
             self._update_window_title()
         except FileAccessError as exc:
             QMessageBox.critical(self, "Ошбика", str(exc))
 
-    def _update_window_title(self):
-        doc = self.controller.current_document
-        if not doc:
-            self.setWindowTitle("RPM Spec Editor")
-            return
 
-        modified = " *" if doc.is_modified else ""
-        self.setWindowTitle(f"RPM Spec Editor - {doc.path.name}{modified}")
+    def _apply_editor_diagnostics(self, issues):
+        diagnostics = []
+
+        for issue in issues:
+            diagnostics.append({
+                "line": issue.line_no,
+                "level": issue.level.value.lower(),
+                "message": issue.message
+            })
+        self.editor.apply_diagnostics(diagnostics)
+
+
+    def _update_window_title(self):
+        title = "RPM Spec Editor"
+        document = self.controller.current_document
+
+        if document:
+            title += f" - {document.path.name}"
+        if self._is_modified:
+            title += " *"
+
+        self.setWindowTitle(title)
 
     def _select_tree_item_by_line(self, line_no: int):
         if self._navigation_lock:
@@ -441,3 +665,127 @@ class MainWindow(QMainWindow):
             item.line_no,
             NavigationSource.STRUCTURE
         )
+
+
+    def _search_text(self, text):
+        self.editor.highlight_search_results(text)
+
+        if not text:
+            return
+
+        self.editor.moveCursor(QTextCursor.Start)
+        self.editor.find(text)
+
+    def _find_next(self):
+        text = self.search_bar.text()
+        if text:
+            self.editor.find(text)
+
+    def _find_previous(self):
+        text = self.search_bar.text()
+        if text:
+            self.editor.find(text, QTextDocument.FindBackward)
+
+    def _clear_search(self):
+        self.editor.highlight_search_results("")
+
+
+    def _update_diagnostics_status(self, issues):
+        errors = 0
+        warnings = 0
+        for issue in issues:
+            level = issue.level.value.lower()
+
+            if level == "error":
+                errors += 1
+            elif level == "warning":
+                warnings += 1
+
+        self.diagnostics_label.setText(f"{errors} errors, {warnings} warnings")
+
+
+    def _apply_settings(self):
+        font = QFont(self.settings.get("font_family"))
+        font.setPointSize(self.settings.get("font_size"))
+
+        self.editor.setFont(font)
+        tab_size = self.settings.get("tab_size")
+
+        self.editor.setTabStopDistance(self.editor.fontMetrics().horizontalAdvance(" ") * tab_size)
+
+        if self.settings.get("word_wrap"):
+            self.editor.setLineWrapMode(QPlainTextEdit.WidgetWidth)
+        else:
+            self.editor.setLineWrapMode(QPlainTextEdit.NoWrap)
+
+    def _show_settings_dialog(self):
+        dialog = SettingsDialog(self.settings, self)
+
+        if dialog.exec_():
+            new_settings = (dialog.get_settings())
+
+            for key, value in new_settings.items():
+                self.settings.set(key, value)
+
+            self._apply_settings()
+
+    def build_rpm(self):
+        self.build_output.clear()
+        self.parser_status_label.setText("Building RPM...")
+        self.build_action.setEnabled(False)
+
+        self.build_thread = QThread()
+
+        self.build_worker = BuildWorker(self.controller)
+
+        self.build_worker.moveToThread(self.build_thread)
+
+        self.build_thread.started.connect(self.build_worker.run)
+        self.build_worker.finished.connect(self._on_build_finished)
+        self.build_worker.failed.connect(self._on_build_failed)
+
+        self.build_worker.finished.connect(self.build_thread.quit)
+        self.build_worker.finished.connect(self.build_worker.deleteLater)
+        self.build_thread.finished.connect(self.build_thread.deleteLater)
+
+        self.build_thread.start()
+
+    def _on_build_finished(self, result):
+        output = ""
+
+        if result.stdout:
+            output += result.stdout
+
+        if result.stderr:
+            output += ("\n\n=== STDERR ===\n\n")
+            output += result.stderr
+
+        self.build_output.setPlainText(output)
+        self.bottom_panel.setCurrentIndex(1)
+
+        if result.success:
+            self.parser_status_label.setText("Build successful")
+        else:
+            self.parser_status_label.setText("Build failed")
+        self.build_action.setEnabled(True)
+
+    def _on_build_failed(self, message):
+        self.build_output.setPlainText(message)
+        self.bottom_panel.setCurrentIndex(1)
+        self.parser_status_label.setText("Build failed")
+        self.build_action.setEnabled(True)
+
+
+    def apply_theme(self):
+        if self.current_theme == "dark":
+            colors = DARK_COLORS
+        else:
+            colors = LIGHT_COLORS
+
+        self.setStyleSheet(build_style(colors))
+        self.editor.apply_theme(colors)
+
+    def change_theme(self, theme):
+        self.current_theme = theme
+        self.apply_theme()
+        self.settings.set("theme", theme)

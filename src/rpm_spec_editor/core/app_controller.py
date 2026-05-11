@@ -3,6 +3,8 @@ from pathlib import Path
 from rpm_spec_editor.storage.file_manager import FileManager, FileAccessError
 from rpm_spec_editor.domain.spec_document import SpecDocument
 from rpm_spec_editor.domain.spec_validator import SpecValidator
+from rpm_spec_editor.domain.rpm_validator import RPMValidator
+from rpm_spec_editor.domain.rpm_builder import RPMBuilder
 
 class AppController:
     def __init__(self):
@@ -10,15 +12,18 @@ class AppController:
         self.current_document: SpecDocument | None = None
 
         self.validator = SpecValidator()
+        self.builder = RPMBuilder()
+
         self.validation_issues = []
+        self.rpm_validator = RPMValidator()
 
     def open_file(self, path: str) -> SpecDocument:
         content = self.file_manager.open_file(path)
-
         self.current_document = SpecDocument(Path(path), content)
-
-        self.validation_issues = self.validator.validate(self.current_document.parsed)
-
+        #self.validation_issues = self.validator.validate(self.current_document.parsed)
+        base_issues = self.validator.validate(self.current_document.parsed)
+        rpm_issues = self.rpm_validator.validate(self.current_document.content)
+        self.validation_issues = (base_issues + rpm_issues)
         return self.current_document
 
     def save_current(self) -> None:
@@ -30,3 +35,9 @@ class AppController:
             self.current_document.content
         )
         self.current_document.mark_saved()
+
+    def build_current(self):
+        if not self.current_document:
+            raise FileAccessError("Файл не открыт")
+
+        return self.builder.build(self.current_document.path)

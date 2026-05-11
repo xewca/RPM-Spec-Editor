@@ -198,8 +198,8 @@ class SpecTreeModel(QAbstractItemModel):
         self._root = TreeItem("Spec File")
 
         # headers
-        self.headers_root = TreeItem("Метаданные", self._root)
-        self._root.add_child(self.headers_root)
+        #self.headers_root = TreeItem("Метаданные", self._root)
+        #self._root.add_child(self.headers_root)
 
         # sections
         self.sections_root = TreeItem("Секции", self._root)

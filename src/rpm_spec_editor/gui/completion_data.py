@@ -1,0 +1,33 @@
+RPM_COMPLETIONS = [
+    "Name:",
+    "Version:",
+    "Release:",
+    "Summary:",
+    "License:",
+    "URL:",
+    "Source0:",
+    "BuildArch:",
+    "BuildRequires:",
+    "Requires:",
+
+    "%description",
+    "%prep",
+    "%build",
+    "%install",
+    "%files",
+    "%check",
+    "%changelog",
+
+    "%autosetup",
+    "%configure",
+    "%cmake",
+    "%make_build",
+    "%make_install",
+
+    "%{name}",
+    "%{version}",
+    "%{release}",
+    "%{buildroot}",
+    "%{_bindir}",
+    "%{_libdir}",
+]

@@ -1,7 +1,7 @@
 from PyQt5.QtGui import QTextCursor, QColor
 from PyQt5.QtWidgets import QPlainTextEdit, QTextEdit
 
-from rpm_spec_editor.gui.syntax.spec_higlighter import SpecSyntaxHighlighter
+from rpm_spec_editor.gui.syntax.spec_highlighter import SpecSyntaxHighlighter
 
 class TextEditor(QPlainTextEdit):
     def __init__(self, parent=None):

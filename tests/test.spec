@@ -1,32 +1,27 @@
-Name:        test-pkg
-License:    MIT
+Name:         test-pkg
+Summary:      Test package.
 
-Release: 1
+License:      MIT
 
-Version: 1.1.1
+Release:     1
 
-Summary: Test.
-
-Summary: Test package.
-Summary(ru): Тестовый пакет.
+Version:     1.1.1
 
 URL:         https://example.com/
 
+BuildRequires: python3-devel
+BuildRequires: PyQt5
+
 %description
-Test spec file description
-dsads
-dsadsad
-dads
+Test spec file 
+description
 
+%check
 
-%prep
-# prep
+%files
+%{_bindir}/%{name}-%{version}
 
-%install
-# install
-
-%build
-# build
 
 %changelog
-# changelog
+* Tue 3 Mar 2026 Vsevolod Mikheev
+- Init new test package
