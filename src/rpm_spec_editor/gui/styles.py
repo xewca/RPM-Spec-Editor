@@ -86,10 +86,16 @@ def build_style(colors):
     }}
     
     
+    QTabBar {{
+        qproperty-expanding: false;
+    }}
+    
+    
     QTabBar::tab {{
         background: {colors["sidebar"]};
         color: {colors["text"]};
         padding: 6px 12px;
+        margin-right: 2px;
         border: 1px solid {colors["border"]};
     }}
     

@@ -17,7 +17,8 @@ from PyQt5.QtWidgets import (
     QLabel,
     QPlainTextEdit,
     QTabWidget,
-    QFileSystemModel
+    QFileSystemModel,
+    QTabBar,
 )
 from PyQt5.QtGui import (
     QTextCursor,
@@ -49,6 +50,7 @@ from rpm_spec_editor.gui.dialogs.settings_dialog import SettingsDialog
 from rpm_spec_editor.gui.workers.build_worker import BuildWorker
 from rpm_spec_editor.gui.recovery_dialog import RecoveryDialog
 from rpm_spec_editor.core.session_manager import SessionManager
+from rpm_spec_editor.gui.formatter import align_spec_fields
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -180,8 +182,8 @@ class MainWindow(QMainWindow):
         self._create_actions()
         self._create_menu()
 
-        self._check_backup_restore()
         self._restore_session()
+        self._check_backup_restore()
 
     def sync_tree_to_line(self, line_no: int):
         index = self._tree_model.index_for_line(line_no)
@@ -334,6 +336,10 @@ class MainWindow(QMainWindow):
         self.save_action.setShortcut("Ctrl+S")
         self.save_action.triggered.connect(self.save_file)
 
+        self.save_as_action = QAction("Сохранить как...", self)
+        self.save_as_action.setShortcut("Ctrl+Shift+S")
+        self.save_as_action.triggered.connect(self.save_file_as)
+
         self.exit_action = QAction("Выход", self)
         self.exit_action.triggered.connect(self.close)
 
@@ -365,6 +371,10 @@ class MainWindow(QMainWindow):
         self.find_action.setShortcut("Ctrl+F")
         self.find_action.triggered.connect(self.search_bar.open)
 
+        self.align_action = QAction("Выровнять spec-поля", self)
+        self.align_action.setShortcut("Ctrl+Alt+L")
+        self.align_action.triggered.connect(self.align_spec_tags)
+
 
     def _create_menu(self):
         menu = self.menuBar()
@@ -374,6 +384,7 @@ class MainWindow(QMainWindow):
         file_menu.addAction(self.new_action)
         file_menu.addAction(self.open_action)
         file_menu.addAction(self.save_action)
+        file_menu.addAction(self.save_as_action)
         file_menu.addSeparator()
         file_menu.addAction(self.exit_action)
 
@@ -389,6 +400,8 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(self.select_all_action)
         edit_menu.addSeparator()
         edit_menu.addAction(self.find_action)
+        edit_menu.addSeparator()
+        edit_menu.addAction(self.align_action)
 
         nav_menu = menu.addMenu("Навигация")
 
@@ -572,8 +585,6 @@ class MainWindow(QMainWindow):
             self._is_modified = False
 
             self.modified_label.setText("Сохранено")
-
-            from pathlib import Path
 
             index = self.tabs.currentIndex()
 
@@ -881,37 +892,50 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("Backup восстановлен", 5000)
 
     def _save_session(self):
-        current_file = None
-        if self.controller.current_document:
-            current_file = str(self.controller.current_document.path)
+        editor = self.current_editor()
 
-        cursor_position = (self.editor.textCursor().position())
+        current_file = None
+
+        if self.controller.current_document:
+            current_file = str(
+                self.controller.current_document.path
+            )
+
+        cursor_position = 0
+
+        if editor:
+            cursor_position = (
+                editor.textCursor().position()
+            )
+
         data = {
             "current_file": current_file,
             "cursor_position": cursor_position,
             "theme": self.current_theme,
         }
+
         self.session_manager.save_session(data)
 
     def _restore_session(self):
-        session = (self.session_manager.load_session())
+        session = self.session_manager.load_session()
+
         if not session:
             return
 
         current_file = session.get("current_file")
+
         if not current_file:
             return
+
         path = Path(current_file)
+
         if not path.exists():
             return
 
         reply = QMessageBox.question(
             self,
             "Восстановление сессии",
-            (
-                "Восстановить "
-                "предыдущую сессию?"
-            ),
+            "Восстановить предыдущую сессию?",
             QMessageBox.Yes | QMessageBox.No
         )
 
@@ -919,19 +943,34 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            document = (self.controller.open_file(str(path)))
-            self.editor.set_content(document.content)
+            document = self.controller.open_file(str(path))
 
-            cursor = self.editor.textCursor()
-            cursor.setPosition(session.get("cursor_position", 0))
-            self.editor.setTextCursor(cursor)
+            editor = self._create_editor_tab(path.name)
+
+            editor.set_content(document.content)
+
+            editor.file_path = str(path)
+
+            self.tabs.setCurrentWidget(editor)
+
+            cursor = editor.textCursor()
+
+            cursor.setPosition(
+                session.get("cursor_position", 0)
+            )
+
+            editor.setTextCursor(cursor)
 
             parsed = document.parse()
+
             self._update_metadata(parsed)
 
-            issues = (self.controller.validator.validate(parsed))
+            issues = self.controller.validator.validate(parsed)
+
             self._tree_model.rebuild(parsed)
+
             self.show_issues(issues)
+
         except Exception:
             pass
 
@@ -1025,11 +1064,88 @@ class MainWindow(QMainWindow):
     def new_file(self):
         editor = self._create_editor_tab("Untitled")
         editor.set_content(
+            "Name:\n"
+            "Summary:\n"
+            "URL:\n"
+            "License:\n\n"
+            "Epoch:\n"
+            "Version:\n"
+            "Release:\n\n"
+            "Source0:\n\n"
+            "BuildRequires:\n\n"
             "%description\n\n"
             "%prep\n\n"
             "%build\n\n"
             "%install\n\n"
-            "%files\n"
+            "%check\n\n"
+            "%files\n\n"
+            "%changelog\n"
         )
         self.tabs.setCurrentWidget(editor)
         self.status_bar.showMessage("Создан новый файл", 3000)
+
+    def save_file_as(self):
+        editor = self.current_editor()
+
+        if not editor:
+            return
+
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Сохранить файл как",
+            "",
+            "RPM Spec Files (*.spec);;All Files (*)"
+        )
+
+        if not path:
+            return
+
+        try:
+            content = editor.get_content()
+
+            with open(path, "w", encoding="utf-8") as file:
+                file.write(content)
+
+            # сохраняем путь в editor
+            editor.file_path = path
+
+            # обновляем document model
+            if self.controller.current_document:
+                self.controller.current_document.path = path
+                self.controller.current_document.content = content
+
+            # обновляем вкладку
+            from pathlib import Path
+
+            index = self.tabs.currentIndex()
+
+            self.tabs.setTabText(
+                index,
+                Path(path).name
+            )
+
+            self._is_modified = False
+
+            self.modified_label.setText("Сохранено")
+
+            self.status_bar.showMessage(
+                "Файл сохранен",
+                3000
+            )
+
+            self._update_window_title()
+
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "Ошибка сохранения",
+                str(exc)
+            )
+
+    def align_spec_tags(self):
+        text = self.editor.toPlainText()
+        formatted = align_spec_fields(text)
+        cursor = self.editor.textCursor()
+        self.editor.selectAll()
+        self.editor.textCursor().insertText(formatted)
+        self.editor.setTextCursor(cursor)

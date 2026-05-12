@@ -5,7 +5,7 @@ from pathlib import Path
 DEFAULT_SETTINGS = {
     "theme": "dark",
 
-    "font_family": "JetBrains Mono",
+    "font_family": "Monospace", # JetBrains Mono
     "font_size": 11,
 
     "tab_size": 4,

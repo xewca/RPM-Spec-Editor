@@ -1,10 +1,12 @@
+import re
 from PyQt5.QtWidgets import (
     QPlainTextEdit,
     QWidget,
     QTextEdit,
     QMenu,
     QCompleter,
-    QToolTip
+    QToolTip,
+
 )
 from PyQt5.QtCore import (
     Qt,
@@ -22,8 +24,8 @@ from PyQt5.QtGui import (
 )
 
 from rpm_spec_editor.gui.syntax.spec_highlighter import SpecSyntaxHighlighter
-from rpm_spec_editor.gui.theme import DARK_COLORS, LIGHT_COLORS
 from rpm_spec_editor.gui.completion_data import RPM_COMPLETIONS
+from rpm_spec_editor.domain.rpm_macros import RPM_MACROS
 
 class LineNumberArea(QWidget):
     def __init__(self, editor):
@@ -54,7 +56,6 @@ class CodeEditor(QPlainTextEdit):
 
         self.setLineWrapMode(QPlainTextEdit.NoWrap)
         self.setCenterOnScroll(True)
-        self.setMouseTracking(True)
 
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_context_menu)
@@ -82,6 +83,7 @@ class CodeEditor(QPlainTextEdit):
         self.line_diagnostics = {}
         self.extral_actions = {}
         self.setMouseTracking(True)
+        self.viewport().setMouseTracking(True)
 
         self.folded_blocks = set()
         self.update_line_number_area_width(0)
@@ -376,21 +378,39 @@ class CodeEditor(QPlainTextEdit):
 
         self.update_selections()
 
-
     def mouseMoveEvent(self, event):
         cursor = self.cursorForPosition(event.pos())
+
+        macro = self.find_macro_under_cursor(cursor)
+
+        if macro and macro in RPM_MACROS:
+            self.setToolTip(f"{macro}\n→ {RPM_MACROS[macro]}")
+            super().mouseMoveEvent(event)
+            return
+
         line_number = cursor.blockNumber() + 1
         diagnostic = self.line_diagnostics.get(line_number)
 
         if diagnostic:
             level = diagnostic.get("level", "").upper()
             message = diagnostic.get("message", "")
-            tooltip = f"{level}:\\n{message}"
-            self.setToolTip(tooltip)
+            self.setToolTip(f"{level}:\n{message}")
         else:
             self.setToolTip("")
 
         super().mouseMoveEvent(event)
+
+    def find_macro_under_cursor(self, cursor):
+        block_text = cursor.block().text()
+        pos = cursor.positionInBlock()
+
+        pattern = r"%\{[^}]+\}"
+
+        for match in re.finditer(pattern, block_text):
+            if match.start() <= pos <= match.end():
+                return match.group()
+
+        return None
 
 
     def highlight_search_results(self, text):
