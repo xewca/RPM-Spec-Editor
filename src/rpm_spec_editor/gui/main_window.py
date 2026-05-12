@@ -47,6 +47,8 @@ from rpm_spec_editor.gui.theme import DARK_COLORS, LIGHT_COLORS
 from rpm_spec_editor.core.settings_manager import SettingsManager
 from rpm_spec_editor.gui.dialogs.settings_dialog import SettingsDialog
 from rpm_spec_editor.gui.workers.build_worker import BuildWorker
+from rpm_spec_editor.gui.recovery_dialog import RecoveryDialog
+from rpm_spec_editor.core.session_manager import SessionManager
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -54,9 +56,11 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("RPM Spec Editor")
         self.resize(900, 600)
-        self.controller = AppController()
         self.settings = SettingsManager()
+        self.controller = AppController()
+        self.session_manager = SessionManager()
         self._is_modified = False
+        self.controller.settings = self.settings
 
         self.current_theme = self.settings.get("theme", "dark")
         self._tree_model = SpecTreeModel()
@@ -66,7 +70,15 @@ class MainWindow(QMainWindow):
         self.metadata_tree.setHeaderLabels(["Поле", "Значение"])
         self.metadata_tree.setColumnWidth(0, 120)
 
-        self.editor = CodeEditor()
+        # self.editor = CodeEditor()
+        self.tabs = QTabWidget()
+        self.tabs.setTabsClosable(True)
+        self.tabs.tabCloseRequested.connect(self._close_tab)
+        self.tabs.currentChanged.connect(self._on_tab_changed)
+        self.editor = None
+
+        self._autosave_timer = QTimer(self)
+        self._autosave_timer.timeout.connect(self._autosave)
         self._apply_settings()
         self.search_bar = SearchBar()
         #self.editor = TextEditor(self)
@@ -82,7 +94,9 @@ class MainWindow(QMainWindow):
         editor_layout = QVBoxLayout(editor_container)
         editor_layout.setContentsMargins(0, 0, 0, 0)
         editor_layout.addWidget(self.search_bar)
-        editor_layout.addWidget(self.editor)
+
+        #editor_layout.addWidget(self.editor)
+        editor_layout.addWidget(self.tabs)
 
         find_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
         find_shortcut.activated.connect(self.search_bar.open)
@@ -116,8 +130,6 @@ class MainWindow(QMainWindow):
         save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
         save_shortcut.activated.connect(self.save_file)
 
-        # self.bottom_panel = self.issues_panel
-        # self.bottom_panel.setMinimumHeight(150)
         self.bottom_panel = QTabWidget()
         self.bottom_panel.addTab(self.issues_panel, "Проблемы")
         self.bottom_panel.addTab(self.build_output, "Сборка")
@@ -147,47 +159,29 @@ class MainWindow(QMainWindow):
         self.navigation = NavigationService(self._tree_model)
 
         self.commands = EditorCommands(
-            editor=self.editor,
+            editor = None,
             navigation=self.navigation,
             main_window=self
         )
         self.structure_view.set_commands(self.commands)
 
-        self.structure_view.expandRequested.connect(lambda idx: self.structure_view.expand(idx))
-        self.structure_view.collapseRequested.connect(lambda idx: self.structure_view.collapse(idx))
         self.structure_view.activated.connect(self._on_structure_item_activated)
 
         self.structure_view.jumpRequested.connect(self._on_tree_jump)
-        self.editor.textChanged.connect(self._on_text_changed)
-        self.editor.cursorPositionChanged.connect(self._on_cursor_position_changed)
         self.issues_panel.itemClicked.connect(self._on_issue_clicked)
 
         self._rebuild_timer = QTimer(self)
         self._rebuild_timer.setSingleShot(True)
         self._rebuild_timer.timeout.connect(self._rebuild_structure)
 
-        #splitter = QSplitter(self)
-        #splitter.addWidget(self.structure_view)
-        #splitter.addWidget(self.editor)
-        #splitter.setStretchFactor(0, 1)
-        #splitter.setStretchFactor(1, 3)
-        #self.setCentralWidget(splitter)
-
         self._navigation_lock = False
         self._navigation_source: NavigationSource | None = None
 
         self._create_actions()
-        self.editor.set_actions({
-            "undo": self.undo_action,
-            "redo": self.redo_action,
-
-            "cut": self.cut_action,
-            "copy": self.copy_action,
-            "paste": self.paste_action,
-
-            "select_all": self.select_all_action
-        })
         self._create_menu()
+
+        self._check_backup_restore()
+        self._restore_session()
 
     def sync_tree_to_line(self, line_no: int):
         index = self._tree_model.index_for_line(line_no)
@@ -328,6 +322,10 @@ class MainWindow(QMainWindow):
         self._navigate_to_line(line_no, NavigationSource.EDITOR) # source="editor"
 
     def _create_actions(self):
+        self.new_action = QAction("Создать", self)
+        self.new_action.setShortcut("Ctrl+N")
+        self.new_action.triggered.connect(self.new_file)
+
         self.open_action = QAction("Открыть", self)
         self.open_action.setShortcut("Ctrl+O")
         self.open_action.triggered.connect(self.open_file)
@@ -336,32 +334,32 @@ class MainWindow(QMainWindow):
         self.save_action.setShortcut("Ctrl+S")
         self.save_action.triggered.connect(self.save_file)
 
-        self.exit_action = QAction("Выход")
+        self.exit_action = QAction("Выход", self)
         self.exit_action.triggered.connect(self.close)
 
         self.undo_action = QAction("Отменить", self)
         self.undo_action.setShortcut("Ctrl+Z")
-        self.undo_action.triggered.connect(self.editor.undo)
+        self.undo_action.triggered.connect(self._undo)
 
         self.redo_action = QAction("Вернуть", self)
         self.redo_action.setShortcut("Ctrl+Y")
-        self.redo_action.triggered.connect(self.editor.redo)
+        self.redo_action.triggered.connect(self._redo)
 
         self.cut_action = QAction("Вырезать", self)
         self.cut_action.setShortcut("Ctrl+X")
-        self.cut_action.triggered.connect(self.editor.cut)
+        self.cut_action.triggered.connect(self._cut)
 
         self.copy_action = QAction("Копировать", self)
         self.copy_action.setShortcut("Ctrl+C")
-        self.copy_action.triggered.connect(self.editor.copy)
+        self.copy_action.triggered.connect(self._copy)
 
         self.paste_action = QAction("Вставить", self)
         self.paste_action.setShortcut("Ctrl+V")
-        self.paste_action.triggered.connect(self.editor.paste)
+        self.paste_action.triggered.connect(self._paste)
 
         self.select_all_action = QAction("Выбрать все", self)
         self.select_all_action.setShortcut("Ctrl+A")
-        self.select_all_action.triggered.connect(self.editor.selectAll)
+        self.select_all_action.triggered.connect(self._select_all)
 
         self.find_action = QAction("Поиск", self)
         self.find_action.setShortcut("Ctrl+F")
@@ -373,6 +371,7 @@ class MainWindow(QMainWindow):
 
         file_menu = menu.addMenu("Файл")
 
+        file_menu.addAction(self.new_action)
         file_menu.addAction(self.open_action)
         file_menu.addAction(self.save_action)
         file_menu.addSeparator()
@@ -434,16 +433,9 @@ class MainWindow(QMainWindow):
 
         settings_menu = menu.addMenu("Настройки")
 
-        editor_settings_action = QAction("Настройки редактора", self)
+        editor_settings_action = QAction("Настройки", self)
         editor_settings_action.triggered.connect(self._show_settings_dialog)
         settings_menu.addAction(editor_settings_action)
-
-        dark_theme_action = QAction("Темная", self)
-        dark_theme_action.triggered.connect(lambda: self.change_theme("dark"))
-        settings_menu.addAction(dark_theme_action)
-        light_theme_action = QAction("Светлая", self)
-        light_theme_action.triggered.connect(lambda: self.change_theme("light"))
-        settings_menu.addAction(light_theme_action)
 
         view_menu = menu.addMenu("Вид")
 
@@ -508,7 +500,11 @@ class MainWindow(QMainWindow):
 
         try:
             document = self.controller.open_file(path)
-            self.editor.set_content(document.content)
+            #self.editor.set_content(document.content)
+            editor = self._create_editor_tab(Path(path).name)
+            editor.set_content(document.content)
+            self.editor = editor
+
             self._is_modified = False
 
             parsed = document.parse()
@@ -545,15 +541,60 @@ class MainWindow(QMainWindow):
         self.editor.go_to_line(line)
 
     def save_file(self):
+        editor = self.current_editor()
+
         try:
+            path = getattr(editor, "file_path", None)
+
+            if not path:
+                path, _ = QFileDialog.getSaveFileName(
+                    self,
+                    "Сохранить spec-файл",
+                    "",
+                    "RPM spec files (*.spec)"
+                )
+
+                if not path:
+                    return
+
+                editor.file_path = path
+
+            content = editor.get_content()
+
+            with open(path, "w", encoding="utf-8") as file:
+                file.write(content)
+
+            # update current document
             if self.controller.current_document:
-                self.controller.current_document.content = (self.editor.get_content())
-            self.controller.save_current()
+                self.controller.current_document.path = path
+                self.controller.current_document.content = content
+
             self._is_modified = False
+
             self.modified_label.setText("Сохранено")
+
+            from pathlib import Path
+
+            index = self.tabs.currentIndex()
+
+            self.tabs.setTabText(
+                index,
+                Path(path).name
+            )
+
+            self.status_bar.showMessage(
+                "Файл сохранен",
+                3000
+            )
+
             self._update_window_title()
-        except FileAccessError as exc:
-            QMessageBox.critical(self, "Ошбика", str(exc))
+
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                str(exc)
+            )
 
 
     def _apply_editor_diagnostics(self, issues):
@@ -703,31 +744,39 @@ class MainWindow(QMainWindow):
 
         self.diagnostics_label.setText(f"{errors} errors, {warnings} warnings")
 
-
     def _apply_settings(self):
-        font = QFont(self.settings.get("font_family"))
-        font.setPointSize(self.settings.get("font_size"))
+        font = QFont(self.settings.get("font_family"), self.settings.get("font_size"))
 
-        self.editor.setFont(font)
-        tab_size = self.settings.get("tab_size")
+        for i in range(self.tabs.count()):
+            editor = self.tabs.widget(i)
 
-        self.editor.setTabStopDistance(self.editor.fontMetrics().horizontalAdvance(" ") * tab_size)
+            if not isinstance(editor, CodeEditor):
+                continue
 
-        if self.settings.get("word_wrap"):
-            self.editor.setLineWrapMode(QPlainTextEdit.WidgetWidth)
-        else:
-            self.editor.setLineWrapMode(QPlainTextEdit.NoWrap)
+            editor.setFont(font)
+            metrics = editor.fontMetrics()
+            editor.setTabStopDistance(metrics.horizontalAdvance(" ") * self.settings.get("tab_size"))
+            if self.settings.get("word_wrap"):
+                editor.setLineWrapMode(QPlainTextEdit.WidgetWidth)
+            else:
+                editor.setLineWrapMode(QPlainTextEdit.NoWrap)
+
+            editor.update_line_number_area_width(0)
+            editor.viewport().update()
+            editor.line_number_area.update()
+            editor.highlighter.rehighlight()
+
+        self._configure_autosave()
+
 
     def _show_settings_dialog(self):
         dialog = SettingsDialog(self.settings, self)
 
         if dialog.exec_():
-            new_settings = (dialog.get_settings())
-
-            for key, value in new_settings.items():
-                self.settings.set(key, value)
-
+            dialog.apply_settings()
+            self.apply_theme()
             self._apply_settings()
+
 
     def build_rpm(self):
         self.build_output.clear()
@@ -775,17 +824,212 @@ class MainWindow(QMainWindow):
         self.parser_status_label.setText("Build failed")
         self.build_action.setEnabled(True)
 
-
     def apply_theme(self):
-        if self.current_theme == "dark":
-            colors = DARK_COLORS
-        else:
+        if self.settings.get("theme", "dark") == "light":
             colors = LIGHT_COLORS
-
+        else:
+            colors = DARK_COLORS
         self.setStyleSheet(build_style(colors))
-        self.editor.apply_theme(colors)
+        for i in range(self.tabs.count()):
+            editor = self.tabs.widget(i)
 
-    def change_theme(self, theme):
-        self.current_theme = theme
-        self.apply_theme()
-        self.settings.set("theme", theme)
+            if isinstance(editor, CodeEditor):
+                editor.apply_theme(colors)
+
+    def _configure_autosave(self):
+        self._autosave_timer.stop()
+        if not self.settings.autosave_enabled:
+            return
+
+        interval_ms = (self.settings.autosave_interval * 1000)
+        self._autosave_timer.start(interval_ms)
+
+
+    def _autosave(self):
+        if not self._is_modified:
+            return
+        if not self.controller.current_document:
+            return
+
+        try:
+            if self.controller.current_document:
+                self.controller.current_document.content = (self.editor.get_content())
+            #self.controller.current_document.update_content(self.editor.get_content())
+            self.settings = None
+            self.controller.save_current()
+            self._is_modified = False
+            self.modified_label.setText("Autosaved")
+        except Exception as exc:
+            print(f"Autosave error: {exc}")
+
+    def _check_backup_restore(self):
+        backups = (self.controller.backup_manager.find_backups())
+
+        if not backups:
+            return
+
+        dialog = RecoveryDialog(backups, self.controller.backup_manager, self)
+
+        if not dialog.exec_():
+            return
+        backup = dialog.selected_backup
+        if not backup:
+            return
+
+        content = (self.controller.backup_manager.read_backup(backup))
+        self.editor.set_content(content)
+        self.status_bar.showMessage("Backup восстановлен", 5000)
+
+    def _save_session(self):
+        current_file = None
+        if self.controller.current_document:
+            current_file = str(self.controller.current_document.path)
+
+        cursor_position = (self.editor.textCursor().position())
+        data = {
+            "current_file": current_file,
+            "cursor_position": cursor_position,
+            "theme": self.current_theme,
+        }
+        self.session_manager.save_session(data)
+
+    def _restore_session(self):
+        session = (self.session_manager.load_session())
+        if not session:
+            return
+
+        current_file = session.get("current_file")
+        if not current_file:
+            return
+        path = Path(current_file)
+        if not path.exists():
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Восстановление сессии",
+            (
+                "Восстановить "
+                "предыдущую сессию?"
+            ),
+            QMessageBox.Yes | QMessageBox.No
+        )
+
+        if reply != QMessageBox.Yes:
+            return
+
+        try:
+            document = (self.controller.open_file(str(path)))
+            self.editor.set_content(document.content)
+
+            cursor = self.editor.textCursor()
+            cursor.setPosition(session.get("cursor_position", 0))
+            self.editor.setTextCursor(cursor)
+
+            parsed = document.parse()
+            self._update_metadata(parsed)
+
+            issues = (self.controller.validator.validate(parsed))
+            self._tree_model.rebuild(parsed)
+            self.show_issues(issues)
+        except Exception:
+            pass
+
+    def closeEvent(self, event):
+        self._save_session()
+        super().closeEvent(event)
+
+    def current_editor(self):
+        widget = self.tabs.currentWidget()
+        if isinstance(widget, CodeEditor):
+            return widget
+        return None
+
+    def _create_editor_tab(self, title="Untitled"):
+        editor = CodeEditor()
+        editor.file_path = None
+        editor.is_new_file = True
+        colors = (
+            LIGHT_COLORS
+            if self.settings.get("theme") == "light"
+            else DARK_COLORS
+        )
+        editor.set_actions({
+            "undo": self.undo_action,
+            "redo": self.redo_action,
+
+            "cut": self.cut_action,
+            "copy": self.copy_action,
+            "paste": self.paste_action,
+
+            "select_all": self.select_all_action
+        })
+
+        editor.apply_theme(colors)
+        editor.textChanged.connect(self._on_text_changed)
+        editor.cursorPositionChanged.connect(self._on_cursor_position_changed)
+        self.tabs.addTab(editor, title)
+        self.tabs.setCurrentWidget(editor)
+        self.commands.editor = editor
+        return editor
+
+    def _close_tab(self, index):
+        widget = self.tabs.widget(index)
+        if widget:
+            widget.deleteLater()
+        self.tabs.removeTab(index)
+        if self.tabs.count() == 0:
+            self.editor = None
+        else:
+            self.editor = self.current_editor()
+
+    def _on_tab_changed(self, index):
+        self.editor = self.current_editor()
+
+    def _undo(self):
+        editor = self.current_editor()
+
+        if editor:
+            editor.undo()
+
+    def _redo(self):
+        editor = self.current_editor()
+
+        if editor:
+            editor.redo()
+
+    def _cut(self):
+        editor = self.current_editor()
+
+        if editor:
+            editor.cut()
+
+    def _copy(self):
+        editor = self.current_editor()
+
+        if editor:
+            editor.copy()
+
+    def _paste(self):
+        editor = self.current_editor()
+
+        if editor:
+            editor.paste()
+
+    def _select_all(self):
+        editor = self.current_editor()
+
+        if editor:
+            editor.selectAll()
+
+    def new_file(self):
+        editor = self._create_editor_tab("Untitled")
+        editor.set_content(
+            "%description\n\n"
+            "%prep\n\n"
+            "%build\n\n"
+            "%install\n\n"
+            "%files\n"
+        )
+        self.tabs.setCurrentWidget(editor)
+        self.status_bar.showMessage("Создан новый файл", 3000)

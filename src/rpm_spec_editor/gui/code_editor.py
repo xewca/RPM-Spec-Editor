@@ -51,10 +51,6 @@ class CodeEditor(QPlainTextEdit):
         super().__init__()
 
         self.colors = {}
-        font = QFont("JetBrains Mono")
-        font.setPointSize(11)
-        self.setFont(font)
-        self.setTabStopDistance(self.fontMetrics().horizontalAdvance(" ") * 4)
 
         self.setLineWrapMode(QPlainTextEdit.NoWrap)
         self.setCenterOnScroll(True)
@@ -583,8 +579,7 @@ class CodeEditor(QPlainTextEdit):
 
     def apply_theme(self, colors):
         self.colors = colors
+        self.highlighter.apply_theme(colors)
         self.highlight_current_line()
         self.viewport().update()
         self.line_number_area.update()
-        self.highlighter.apply_theme(colors)
-        self.highlighter.rehighlight()

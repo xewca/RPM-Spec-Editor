@@ -24,12 +24,12 @@ class SpecSyntaxHighlighter(QSyntaxHighlighter):
         self.rules = []
 
         comment_format = QTextCharFormat()
-        comment_format.setForeground(QColor(self.colors.get("success", "#6b8e6b")))
+        comment_format.setForeground(QColor(self.colors.get("syntax_comment", "#6b8e6b")))
         self.rules.append((QRegularExpression(r"#.*$"), comment_format))
 
 
         section_format = QTextCharFormat()
-        section_format.setForeground(QColor(self.colors.get("accent", "#0057b7")))
+        section_format.setForeground(QColor(self.colors.get("syntax_section", "#0057b7")))
         section_format.setFontWeight(QFont.Bold)
 
         sections = [
@@ -52,7 +52,7 @@ class SpecSyntaxHighlighter(QSyntaxHighlighter):
 
 
         header_format = QTextCharFormat()
-        header_format.setForeground(QColor(self.colors.get("warning", "#cc5500")))
+        header_format.setForeground(QColor(self.colors.get("syntax_header", "#cc5500")))
         header_format.setFontWeight(QFont.Bold)
 
         headers = [
@@ -77,14 +77,14 @@ class SpecSyntaxHighlighter(QSyntaxHighlighter):
             self.rules.append((QRegularExpression(pattern), header_format))
 
         macro_format = QTextCharFormat()
-        macro_format.setForeground(QColor(self.colors.get("accent", "#8000ff")))
+        macro_format.setForeground(QColor(self.colors.get("syntax_macro", "#8000ff")))
 
         self.rules.append((QRegularExpression(r"%\{[^}]+\}"), macro_format))
         self.rules.append((QRegularExpression(r"%define\s+\w+"), macro_format))
         self.rules.append((QRegularExpression(r"%global\s+\w+"), macro_format))
 
         conditional_format = QTextCharFormat()
-        conditional_format.setForeground(QColor(self.colors.get("warning", "#cc5500")))
+        conditional_format.setForeground(QColor(self.colors.get("syntax_conditional", "#cc5500")))
         conditional_format.setFontWeight(QFont.Bold)
 
         conditionals = [
@@ -97,6 +97,16 @@ class SpecSyntaxHighlighter(QSyntaxHighlighter):
 
         for pattern in conditionals:
             self.rules.append((QRegularExpression(pattern), conditional_format))
+
+    def highlightBlock(self, text):
+        for pattern, text_format in self.rules:
+            match_iterator = pattern.globalMatch(text)
+
+            while match_iterator.hasNext():
+                match = match_iterator.next()
+                start = match.capturedStart()
+                length = match.capturedLength()
+                self.setFormat(start, length, text_format)
 
 
 '''

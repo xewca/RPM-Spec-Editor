@@ -4,15 +4,20 @@ from PyQt5.QtCore import pyqtSignal, QModelIndex, QItemSelectionModel, Qt, QPoin
 
 class StructureView(QTreeView):
     jumpRequested = pyqtSignal(int)
-    collapseRequested = pyqtSignal(QModelIndex)
-    expandRequested = pyqtSignal(QModelIndex)
+    #collapseRequested = pyqtSignal(QModelIndex)
+    #expandRequested = pyqtSignal(QModelIndex)
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
         self._commands = None
 
+        self.setRootIsDecorated(False)
+        self.setItemsExpandable(False)
+        self.setUniformRowHeights(True)
+        self.setHeaderHidden(True)
         self.setExpandsOnDoubleClick(False)
+
         self.doubleClicked.connect(self._on_item_activated)
 
         self.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -45,18 +50,10 @@ class StructureView(QTreeView):
             jump.triggered.connect(lambda: self.jumpRequested.emit(item.line_no))
             return
 
-        if item.parent and item.parent.text == "Секции":
+        if item.line_no is not None:
             jump = menu.addAction("Перейти к секции")
             jump.triggered.connect(lambda: self.jumpRequested.emit(item.line_no))
-
             select = menu.addAction("Выделить секцию")
-            select.triggered.connect(lambda: self._commands.select_current_section())
 
-        if item.parent and item.parent.text == "Секции":
-            menu.addSeparator()
-
-            expand = menu.addAction("Развернуть секцию")
-            expand.triggered.connect(lambda: self.expandRequested.emit(index))
-
-            collapse = menu.addAction("Свернуть секцию")
-            collapse.triggered.connect(lambda: self.collapseRequested.emit(index))
+            if self._commands:
+                select.triggered.connect(lambda: self._commands.select_current_section())

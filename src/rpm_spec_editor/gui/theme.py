@@ -8,6 +8,12 @@ DARK_COLORS = {
     "text": "#d4d4d4",
     "muted_text": "#9da5b4",
 
+    "syntax_comment": "#6a9955",
+    "syntax_section": "#569cd6",
+    "syntax_header": "#4ec9b0",
+    "syntax_macro": "#dcdcaa",
+    "syntax_conditional": "#c586c0",
+
     "accent": "#569cd6",
     "current_line": "#2a2d2e",
     "selection": "#264f78",
@@ -33,9 +39,15 @@ LIGHT_COLORS = {
     "text": "#202020",
     "muted_text": "#606060",
 
+    "syntax_comment": "#008000",
+    "syntax_section": "#0000cc",
+    "syntax_header": "#aa5500",
+    "syntax_macro": "#7a3cff",
+    "syntax_conditional": "#af00db",
+
     "accent": "#0066cc",
-    "current_line": "#f5f5f5",
-    "selection": "#cce5ff",
+    "current_line": "#f2f7ff",
+    "selection": "#cce2ff",
 
     "error": "#d32f2f",
     "warning": "#f57c00",

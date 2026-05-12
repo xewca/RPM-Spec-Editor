@@ -5,6 +5,7 @@ from rpm_spec_editor.domain.spec_document import SpecDocument
 from rpm_spec_editor.domain.spec_validator import SpecValidator
 from rpm_spec_editor.domain.rpm_validator import RPMValidator
 from rpm_spec_editor.domain.rpm_builder import RPMBuilder
+from rpm_spec_editor.core.backup_manager import BackupManager
 
 class AppController:
     def __init__(self):
@@ -13,6 +14,9 @@ class AppController:
 
         self.validator = SpecValidator()
         self.builder = RPMBuilder()
+
+        backup_dir = (Path.home() / ".rpm_spec_editor" / "backups")
+        self.backup_manager = BackupManager(backup_dir=backup_dir, max_backups=10)
 
         self.validation_issues = []
         self.rpm_validator = RPMValidator()
@@ -30,10 +34,10 @@ class AppController:
         if not self.current_document:
             raise FileAccessError("Ошибка: файл не выбран для сохранения.")
 
-        self.file_manager.save_file(
-            self.current_document.path,
-            self.current_document.content
-        )
+        if (self.settings and self.settings.backup_enabled):
+            self.backup_manager.create_backup(self.current_document.path, self.current_document.content)
+
+        self.file_manager.save_file(self.current_document.path, self.current_document.content)
         self.current_document.mark_saved()
 
     def build_current(self):

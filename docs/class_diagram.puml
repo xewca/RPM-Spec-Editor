@@ -1,0 +1,71 @@
+@startuml
+
+skinparam classAttributeIconSize 0
+
+class MainWindow <<boundary>> {
+    - controller : AppController
+    - settings : SettingsManager
+
+    + openFile() : void
+    + saveFile() : void
+}
+
+class AppController <<control>> {
+    - parser : SpecParser
+    - analyzer : SpecAnalyzer
+    - currentFile : SpecFile
+
+    + loadSpec(path : String) : void
+    + analyzeSpec() : void
+}
+
+class SettingsManager <<entity>> {
+    - configPath : String
+    - theme : String
+
+    + loadSettings() : void
+    + saveSettings() : void
+}
+
+class SpecAnalyzer <<control>> {
+    + analyze(file : SpecFile) : void
+}
+
+class SpecFile <<entity>> {
+    - path : String
+    - content : String
+
+    + load() : void
+    + save() : void
+}
+
+class SpecSection <<entity>> {
+    - name : String
+    - body : String
+}
+
+class SpecTreeModel <<boundary>> {
+    + buildTree() : void
+}
+
+' =========================
+' СВЯЗИ
+' =========================
+
+' Ассоциация
+MainWindow --> AppController : uses
+
+' Агрегация
+MainWindow o-- SettingsManager : contains
+
+' Композиция
+SpecFile *-- SpecSection : consists of
+
+' Зависимость
+AppController ..> SpecAnalyzer : depends
+SpecTreeModel ..> SpecFile : reads
+
+' Ассоциация
+AppController --> SpecFile : edits
+
+@enduml

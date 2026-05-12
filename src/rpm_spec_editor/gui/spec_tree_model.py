@@ -194,17 +194,7 @@ class SpecTreeModel(QAbstractItemModel):
 
     def build_from_spec(self, spec: SpecFile) -> None:
         self.beginResetModel()
-
         self._root = TreeItem("Spec File")
-
-        # headers
-        #self.headers_root = TreeItem("Метаданные", self._root)
-        #self._root.add_child(self.headers_root)
-
-        # sections
-        self.sections_root = TreeItem("Секции", self._root)
-        self._root.add_child(self.sections_root)
-
         section_items = []
 
         for section_name in spec.section_order:
@@ -212,15 +202,13 @@ class SpecTreeModel(QAbstractItemModel):
 
             item = TreeItem(
                 section.name,
-                self.sections_root,
+                self._root,
                 line_no=section.start_line,
                 start_line=section.start_line
             )
-
             section_items.append(item)
-            self.sections_root.add_child(item)
+            self._root.add_child(item)
 
-        # end lines
         for i, item in enumerate(section_items):
             if i + 1 < len(section_items):
                 next_item = section_items[i + 1]
