@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Name=RPM Spec Editor
+Comment=GUI tool for editing RPM spec files
+Exec=rpm-spec-editor
+Icon=rpm-spec-editor
+Terminal=false
+Type=Application
+Categories=Development;IDE;
+StartupNotify=true
