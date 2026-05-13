@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rpm-spec-editor"
+version = "0.0.1"
+description = "GUI editor and analyzer for RPM spec files"
+readme = "README.md"
+requires-python = ">=3.11"
+
+authors = [
+    { name = "xewca" }
+]
+
+dependencies = [
+    "PyQt5"
+]
+
+[project.scripts]
+rpm-spec-editor = "rpm_spec_editor.app:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+rpm_spec_editor = ["assets/*.png"]
