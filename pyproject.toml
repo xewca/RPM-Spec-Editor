@@ -29,3 +29,27 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 rpm_spec_editor = ["assets/*.png"]
+
+[tool.pytest.ini_options]
+pythonpath = [
+    "src"
+]
+
+testpaths = [
+    "tests"
+]
+
+addopts = """
+-v
+--tb=short
+--strict-markers
+"""
+
+markers = [
+    "unit",
+    "integration",
+    "system",
+    "gui"
+]
+
+qt_api = "pyqt5"
