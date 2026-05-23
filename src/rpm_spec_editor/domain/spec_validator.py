@@ -55,21 +55,20 @@ class SpecValidator:
                 )
 
         existing_sections = {
-            name.lower(): section
-            for name, section
-            in spec.sections.items()
+            name.lower().strip(): section
+            for name, section in spec.sections.items()
         }
 
         for section in self.REQUIRED_SECTIONS:
             if section in existing_sections:
                 continue
 
-            previous = self.SECTION_ORDER.get(section)
-
-            if previous and previous in existing_sections:
-                line_no = (existing_sections[previous].start_line + 1)
-            else:
-                line_no = len(spec.headers) + 1
+            line_no = 1
+            #previous = self.SECTION_ORDER.get(section)
+            #if previous and previous in existing_sections:
+            #    line_no = (existing_sections[previous].start_line + 1)
+            #else:
+            #    line_no = len(spec.headers) + 1
 
             issues.append(
                 ValidationIssue(
@@ -79,15 +78,5 @@ class SpecValidator:
                     line_no=line_no
                 )
             )
-
-        #for section in self.REQUIRED_SECTIONS:
-        #    if section not in existing_sections:
-        #        issues.append(
-        #            ValidationIssue(
-        #                level=ValidationLevel.ERROR,
-        #                message=f"Отсутствует обязательная секция: %{section}",
-        #                line_no=len(spec.headers) + 1
-        #            )
-        #        )
 
         return issues

@@ -28,6 +28,8 @@ class FileManager:
             return file_path.read_text(encoding="utf-8")
         except PermissionError as exc:
             raise FileAccessError("Исключение: недостаточно прав для чтения файлов.") from exc
+        except UnicodeDecodeError as exc:
+            raise FileAccessError("Исключение: ошибка декодирования UTF-8.") from exc
         except OSError as exc:
             raise FileAccessError("Исключение: ошибка чтения файла.") from exc
 
@@ -81,4 +83,4 @@ class FileManager:
         except PermissionError as exc:
             raise FileAccessError("Исключение: недостаточно прав для файла.") from exc
         except OSError as exc:
-            raise FileAccessError("Исключение: ошбика при восстановлении файла.") from exc
+            raise FileAccessError("Исключение: ошибка при восстановлении файла.") from exc

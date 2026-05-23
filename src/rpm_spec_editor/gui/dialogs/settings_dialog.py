@@ -28,7 +28,7 @@ class SettingsDialog(QDialog):
 
 
         self.theme_combo = QComboBox()
-        self.theme_combo.addItems(["dark", "light"])
+        self.theme_combo.addItems(["Темная", "Светлая"])
         self.theme_combo.setCurrentText(self.settings.theme)
         form.addRow("Тема:", self.theme_combo)
 

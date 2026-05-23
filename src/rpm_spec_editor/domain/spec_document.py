@@ -5,7 +5,7 @@ from rpm_spec_editor.parsing.models import SpecFile
 
 class SpecDocument:
     def __init__(self, path: Path, content: str):
-        self.path = path
+        self.path = Path(path)
         self._original_content = content
         self._content = content
 

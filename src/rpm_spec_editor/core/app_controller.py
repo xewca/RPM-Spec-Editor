@@ -6,6 +6,8 @@ from rpm_spec_editor.domain.spec_validator import SpecValidator
 from rpm_spec_editor.domain.rpm_validator import RPMValidator
 from rpm_spec_editor.domain.rpm_builder import RPMBuilder
 from rpm_spec_editor.core.backup_manager import BackupManager
+from rpm_spec_editor.core.settings_manager import SettingsManager
+
 
 class AppController:
     def __init__(self):
@@ -20,6 +22,7 @@ class AppController:
 
         self.validation_issues = []
         self.rpm_validator = RPMValidator()
+        self.settings = SettingsManager()
 
     def open_file(self, path: str) -> SpecDocument:
         content = self.file_manager.open_file(path)

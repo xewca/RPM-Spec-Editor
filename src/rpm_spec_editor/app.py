@@ -11,7 +11,7 @@ def main():
     icon = QIcon.fromTheme("rpm-spec-editor")
     if icon.isNull():
         base_dir = Path(__file__).resolve().parent
-        local_icon = base_dir / "assets" / "SEicon.png"
+        local_icon = base_dir / "assets" / "rpm-spec-editor.png"
 
         if local_icon.exists():
             icon = QIcon(str(local_icon))

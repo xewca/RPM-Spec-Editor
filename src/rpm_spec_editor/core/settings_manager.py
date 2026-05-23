@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 DEFAULT_SETTINGS = {
-    "theme": "dark",
+    "theme": "Темная",
 
     "font_family": "Monospace", # JetBrains Mono
     "font_size": 11,
@@ -65,7 +65,7 @@ class SettingsManager:
 
     @property
     def theme(self):
-        return self.get("theme", "dark")
+        return self.get("theme", "Темная")
 
 
     @property
@@ -90,7 +90,7 @@ class SettingsManager:
 
     @property
     def font_family(self):
-        return self.get("font_family", "JetBrains Mono")
+        return self.get("font_family", "Monospace")
 
     @property
     def font_size(self):

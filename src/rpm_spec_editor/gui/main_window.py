@@ -185,6 +185,7 @@ class MainWindow(QMainWindow):
         self._restore_session()
         self._check_backup_restore()
 
+
     def sync_tree_to_line(self, line_no: int):
         index = self._tree_model.index_for_line(line_no)
         if not index.isValid():
@@ -195,7 +196,7 @@ class MainWindow(QMainWindow):
 
     def _on_text_changed(self):
         self._is_modified = True
-        self.modified_label.setText("Modified")
+        self.modified_label.setText("Изменен")
         self._update_window_title()
         if self.controller.current_document:
             self.controller.current_document.content = (self.editor.get_content())
@@ -203,7 +204,7 @@ class MainWindow(QMainWindow):
         self._rebuild_timer.start(300)
 
     def _rebuild_structure(self):
-        self.parser_status_label.setText("Parsing...")
+        self.parser_status_label.setText("Анализ...")
 
         if self._navigation_lock:
             return
@@ -220,8 +221,8 @@ class MainWindow(QMainWindow):
             parsed = doc.parse()
             self._update_metadata(parsed)
         except Exception as exc:
-            print("Parse error:", exc)
-            self.parser_status_label.setText("Parse error")
+            print("Ошибки анализа:", exc)
+            self.parser_status_label.setText("Ошибки анализа")
             return
 
         #issues = self.controller.validator.validate(parsed)
@@ -238,7 +239,7 @@ class MainWindow(QMainWindow):
         # self.issues_panel.itemClicked.connect(self._on_issue_clicked)
         self._restore_expanded_lines(expanded)
         self._expand_issues_if_needed()
-        self.parser_status_label.setText("Ready")
+        self.parser_status_label.setText("Готов")
 
     def _on_issue_clicked(self, item):
         try:
@@ -303,7 +304,7 @@ class MainWindow(QMainWindow):
         cursor = self.editor.textCursor()
         line = cursor.blockNumber() + 1
         column = cursor.columnNumber() + 1
-        self.cursor_position_label.setText(f"Ln {line}, Col {column}")
+        self.cursor_position_label.setText(f"Стр. {line}, Ст. {column}")
 
         if self._navigation_lock:
             return
@@ -577,9 +578,8 @@ class MainWindow(QMainWindow):
             with open(path, "w", encoding="utf-8") as file:
                 file.write(content)
 
-            # update current document
             if self.controller.current_document:
-                self.controller.current_document.path = path
+                self.controller.current_document.path = Path(path)
                 self.controller.current_document.content = content
 
             self._is_modified = False
@@ -661,25 +661,6 @@ class MainWindow(QMainWindow):
             self._navigation_lock = False
 
     def _navigate_to_line(self, line_no, source):
-        """
-        if self._navigation_source is not None:
-            return
-
-        self._navigation_source = source
-        try:
-            if source == NavigationSource.EDITOR:
-                self._select_tree_item_by_line(line_no)
-            elif source == NavigationSource.TREE:
-                self._jump_editor_to_line(line_no)
-        finally:
-            self._navigation_source = None
-
-        if source != "editor":
-            self._jump_editor_to_line(line_no)
-
-        if source != "tree":
-            self._select_tree_item_by_line(line_no)
-        """
         if self._navigation_lock:
             return
 
@@ -753,7 +734,7 @@ class MainWindow(QMainWindow):
             elif level == "warning":
                 warnings += 1
 
-        self.diagnostics_label.setText(f"{errors} errors, {warnings} warnings")
+        self.diagnostics_label.setText(f"{errors} ошибок, {warnings} предупреждений")
 
     def _apply_settings(self):
         font = QFont(self.settings.get("font_family"), self.settings.get("font_size"))
@@ -791,7 +772,7 @@ class MainWindow(QMainWindow):
 
     def build_rpm(self):
         self.build_output.clear()
-        self.parser_status_label.setText("Building RPM...")
+        self.parser_status_label.setText("Сборка RPM-пакета...")
         self.build_action.setEnabled(False)
 
         self.build_thread = QThread()
@@ -824,19 +805,19 @@ class MainWindow(QMainWindow):
         self.bottom_panel.setCurrentIndex(1)
 
         if result.success:
-            self.parser_status_label.setText("Build successful")
+            self.parser_status_label.setText("Сборка успешно")
         else:
-            self.parser_status_label.setText("Build failed")
+            self.parser_status_label.setText("Сборка ошибки")
         self.build_action.setEnabled(True)
 
     def _on_build_failed(self, message):
         self.build_output.setPlainText(message)
         self.bottom_panel.setCurrentIndex(1)
-        self.parser_status_label.setText("Build failed")
+        self.parser_status_label.setText("Сборка провалено")
         self.build_action.setEnabled(True)
 
     def apply_theme(self):
-        if self.settings.get("theme", "dark") == "light":
+        if self.settings.get("Светлая", "Темная") == "Светлая":
             colors = LIGHT_COLORS
         else:
             colors = DARK_COLORS
@@ -869,9 +850,9 @@ class MainWindow(QMainWindow):
             self.settings = None
             self.controller.save_current()
             self._is_modified = False
-            self.modified_label.setText("Autosaved")
+            self.modified_label.setText("Автосохранение")
         except Exception as exc:
-            print(f"Autosave error: {exc}")
+            print(f"Ошибки автосохранения: {exc}")
 
     def _check_backup_restore(self):
         backups = (self.controller.backup_manager.find_backups())
@@ -886,9 +867,12 @@ class MainWindow(QMainWindow):
         backup = dialog.selected_backup
         if not backup:
             return
+        if self.editor is None:
+            return
 
         content = (self.controller.backup_manager.read_backup(backup))
-        self.editor.set_content(content)
+        if self.editor is not None:
+            self.editor.set_content(content)
         self.status_bar.showMessage("Backup восстановлен", 5000)
 
     def _save_session(self):
@@ -984,13 +968,13 @@ class MainWindow(QMainWindow):
             return widget
         return None
 
-    def _create_editor_tab(self, title="Untitled"):
+    def _create_editor_tab(self, title="Безымянный"):
         editor = CodeEditor()
         editor.file_path = None
         editor.is_new_file = True
         colors = (
             LIGHT_COLORS
-            if self.settings.get("theme") == "light"
+            if self.settings.get("theme") == "Светлая"
             else DARK_COLORS
         )
         editor.set_actions({
@@ -1062,7 +1046,7 @@ class MainWindow(QMainWindow):
             editor.selectAll()
 
     def new_file(self):
-        editor = self._create_editor_tab("Untitled")
+        editor = self._create_editor_tab("Безымянный")
         editor.set_content(
             "Name:\n"
             "Summary:\n"

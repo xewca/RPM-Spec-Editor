@@ -1,5 +1,3 @@
-from lib2to3.fixes.fix_metaclass import remove_trailing_newline
-
 from rpm_spec_editor.gui.spec_tree_model import SpecTreeModel
 from rpm_spec_editor.gui.navigation_types import NavigationSource
 
