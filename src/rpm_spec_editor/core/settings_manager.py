@@ -1,9 +1,10 @@
 import json
 from pathlib import Path
+from PyQt5.QtCore import QObject, pyqtSignal
 
 
 DEFAULT_SETTINGS = {
-    "theme": "Темная",
+    "theme": "Светлая",
 
     "font_family": "Monospace", # JetBrains Mono
     "font_size": 11,
@@ -19,8 +20,11 @@ DEFAULT_SETTINGS = {
 }
 
 
-class SettingsManager:
+class SettingsManager(QObject):
+    settings_changed = pyqtSignal()
+
     def __init__(self):
+        super().__init__()
         self.settings_dir = Path.home() / ".rpm_spec_editor"
         self.settings_file = self.settings_dir / "settings.json"
 
@@ -56,6 +60,7 @@ class SettingsManager:
     def set(self, key, value):
         self.settings[key] = value
         self.save()
+        self.settings_changed.emit()
 
     def reset(self):
         self.settings = DEFAULT_SETTINGS.copy()
@@ -65,7 +70,7 @@ class SettingsManager:
 
     @property
     def theme(self):
-        return self.get("theme", "Темная")
+        return self.get("theme", "Светлая")
 
 
     @property

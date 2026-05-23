@@ -767,7 +767,6 @@ class MainWindow(QMainWindow):
         if dialog.exec_():
             dialog.apply_settings()
             self.apply_theme()
-            self._apply_settings()
 
 
     def build_rpm(self):
@@ -817,7 +816,7 @@ class MainWindow(QMainWindow):
         self.build_action.setEnabled(True)
 
     def apply_theme(self):
-        if self.settings.get("Светлая", "Темная") == "Светлая":
+        if self.settings.get("theme", "Темная") == "Светлая":
             colors = LIGHT_COLORS
         else:
             colors = DARK_COLORS
@@ -972,11 +971,8 @@ class MainWindow(QMainWindow):
         editor = CodeEditor()
         editor.file_path = None
         editor.is_new_file = True
-        colors = (
-            LIGHT_COLORS
-            if self.settings.get("theme") == "Светлая"
-            else DARK_COLORS
-        )
+        #colors = (LIGHT_COLORS if self.settings.get("theme") == "Светлая" else DARK_COLORS)
+        colors = LIGHT_COLORS if self.settings.theme == "Светлая" else DARK_COLORS
         editor.set_actions({
             "undo": self.undo_action,
             "redo": self.redo_action,
