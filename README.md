@@ -13,8 +13,8 @@ A desktop application for creating, editing, and analyzing RPM `.spec` files wit
 
 ## Technology Stack
 
-- Python 3.10+
-- PyQt6 (or PySide6 depending on build)
+- Python 3.8+
+- PyQt5
 - RPM spec parsing logic (custom)
 - Settings management system (JSON-based)
 
