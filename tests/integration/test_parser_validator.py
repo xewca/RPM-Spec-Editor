@@ -1,8 +1,9 @@
 import pytest
+from PyQt5.QtWidgets import QApplication
 
 from rpm_spec_editor.parsing.spec_parser import SpecParser
 from rpm_spec_editor.domain.spec_validator import SpecValidator
-
+pytestmark = pytest.mark.gui
 
 @pytest.mark.integration
 def test_parser_to_validator_missing_fields():

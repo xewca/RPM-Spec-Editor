@@ -1,9 +1,10 @@
 import pytest
+from PyQt5.QtWidgets import QApplication
 
 from rpm_spec_editor.core.app_controller import AppController
 from rpm_spec_editor.domain.spec_validator import SpecValidator
 from rpm_spec_editor.parsing.spec_parser import SpecParser
-
+pytestmark = pytest.mark.gui
 
 @pytest.mark.integration
 def test_open_file_workflow(tmp_path):

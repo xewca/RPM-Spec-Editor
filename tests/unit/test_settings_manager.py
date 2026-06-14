@@ -1,6 +1,9 @@
 import json, pytest
 
-from rpm_spec_editor.core.settings_manager import SettingsManager
+from rpm_spec_editor.core.settings_manager import (
+    SettingsManager,
+    DEFAULT_SETTINGS,
+)
 
 @pytest.mark.unit
 def test_settings_manager_initialization_creates_default(tmp_path, monkeypatch):
@@ -9,7 +12,8 @@ def test_settings_manager_initialization_creates_default(tmp_path, monkeypatch):
 
     sm = SettingsManager()
 
-    assert sm.settings["theme"] == "Темная"
+    assert sm.settings["theme"] == DEFAULT_SETTINGS["theme"]
+
     assert sm.settings_dir.exists()
     assert sm.settings_file.exists()
 
@@ -55,7 +59,7 @@ def test_load_corrupted_json_falls_back_to_default(tmp_path, monkeypatch):
     # ломаем файл
     sm.settings_file.write_text("{ broken json")
     sm2 = SettingsManager()
-    assert sm2.get("theme") == "Темная"
+    assert sm2.get("theme") == DEFAULT_SETTINGS["theme"]
 
 
 @pytest.mark.unit
@@ -79,7 +83,7 @@ def test_reset_restores_defaults(tmp_path, monkeypatch):
 
     sm.reset()
 
-    assert sm.get("theme") == "Темная"
+    assert sm.theme == DEFAULT_SETTINGS["theme"]
 
 
 @pytest.mark.unit
@@ -97,7 +101,7 @@ def test_properties(tmp_path, monkeypatch):
 
     sm = SettingsManager()
 
-    assert sm.theme == "Темная"
+    assert sm.theme == DEFAULT_SETTINGS["theme"]
     assert sm.autosave_enabled is True
     assert sm.autosave_interval == 30
     assert sm.backup_enabled is True

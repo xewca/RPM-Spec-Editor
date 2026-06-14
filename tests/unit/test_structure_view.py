@@ -2,7 +2,9 @@ import pytest
 from unittest.mock import MagicMock
 
 from rpm_spec_editor.gui.structure_view import StructureView
+from PyQt5.QtWidgets import QApplication
 
+pytestmark = pytest.mark.gui
 @pytest.mark.unit
 def test_jump_requested(qtbot):
     view = StructureView()

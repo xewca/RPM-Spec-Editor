@@ -1,7 +1,9 @@
 import pytest
 from unittest.mock import MagicMock
-
+from PyQt5.QtWidgets import QApplication
 from rpm_spec_editor.gui.text_editor import TextEditor
+
+pytestmark = pytest.mark.gui
 
 @pytest.mark.unit
 def test_get_set_content(qtbot):

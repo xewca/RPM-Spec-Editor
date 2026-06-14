@@ -3,6 +3,7 @@ import pytest
 from rpm_spec_editor.parsing.spec_parser import SpecParser
 from rpm_spec_editor.domain.spec_validator import SpecValidator
 
+pytestmark = pytest.mark.gui
 
 @pytest.fixture
 def parser():

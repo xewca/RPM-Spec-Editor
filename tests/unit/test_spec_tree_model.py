@@ -1,9 +1,9 @@
 import pytest
 from PyQt5.QtCore import QModelIndex
 from PyQt5.QtCore import Qt
-
-
+from PyQt5.QtWidgets import QApplication
 from rpm_spec_editor.gui.spec_tree_model import SpecTreeModel
+pytestmark = pytest.mark.gui
 
 
 @pytest.mark.unit

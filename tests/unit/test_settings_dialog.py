@@ -4,6 +4,9 @@ from PyQt5.QtWidgets import QDialogButtonBox
 
 from rpm_spec_editor.gui.dialogs.settings_dialog import SettingsDialog
 
+from PyQt5.QtWidgets import QApplication
+
+pytestmark = pytest.mark.gui
 
 @pytest.mark.unit
 def test_dialog_initial_values(qtbot):

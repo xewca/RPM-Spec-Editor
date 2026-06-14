@@ -1,4 +1,7 @@
 import pytest
+from PyQt5.QtWidgets import QApplication
+
+pytestmark = pytest.mark.gui
 from PyQt5.QtCore import QModelIndex
 
 from PyQt5.QtWidgets import QFileDialog
