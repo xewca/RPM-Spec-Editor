@@ -1,5 +1,5 @@
 [Desktop Entry]
-Version=0.0.1
+Version=0.0.5
 Name=RPM Spec Editor
 Comment=GUI tool for editing RPM spec files
 Exec=rpm-spec-editor
