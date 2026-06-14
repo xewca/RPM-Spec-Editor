@@ -35,6 +35,10 @@ pythonpath = [
     "src"
 ]
 
+[tool.setuptools.data_files]
+"share/applications" = ["packaging/rpm-spec-editor.desktop"]
+"share/icons/hicolor/256x256/apps" = ["src/rpm_spec_editor/assets/rpm-spec-editor.png"]
+
 testpaths = [
     "tests"
 ]
