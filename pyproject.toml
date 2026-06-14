@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rpm-spec-editor"
-version = "0.0.1"
+version = "0.0.5"
 description = "GUI editor and analyzer for RPM spec files"
 readme = "README.md"
 requires-python = ">=3.8"
